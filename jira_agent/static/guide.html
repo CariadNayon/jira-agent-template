@@ -2,74 +2,875 @@
 <html lang="de">
 <head>
 <meta charset="utf-8">
-<title>Anleitung – Jira Agent</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Guide – Jira Agent</title>
 <style>
-  body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;margin:0;color:#222;font-size:14px;line-height:1.55}
-  header{position:sticky;top:0;background:#fff;border-bottom:1px solid #eee;z-index:2}
-  .bar{display:flex;justify-content:space-between;align-items:center;padding:12px 16px 6px}
-  .bar h1{font-size:16px;margin:0}
-  .tabs{display:flex;gap:4px;padding:0 12px}
-  .tabs button{border:0;background:none;padding:8px 12px;cursor:pointer;border-bottom:2px solid transparent;font-size:14px}
-  .tabs button.active{border-bottom-color:#1b5fd1;color:#1b5fd1;font-weight:600}
-  main{padding:4px 22px 32px;max-width:860px}
-  .part{display:none}.part.active{display:block}
-  h2{font-size:15px;margin:24px 0 6px;padding-top:4px}
-  h3{font-size:14px;margin:16px 0 4px}
-  code{background:#f4f4f4;padding:1px 4px;border-radius:4px;font-size:13px}
-  pre{background:#f6f8fa;border:1px solid #e5e5e5;border-radius:6px;padding:10px 12px;overflow:auto;font-size:12.5px;line-height:1.45;margin:6px 0}
-  pre code{background:none;padding:0}
-  ul,ol{padding-left:22px}li{margin:3px 0}
-  .hint{color:#666;font-size:12.5px}
-  .box{border:1px solid #e3e8f4;background:#f7f9fd;border-radius:8px;padding:10px 14px;margin:10px 0}
-  .warn{border-color:#f0c36d;background:#fff8e1}
-  table{border-collapse:collapse;width:100%;margin:6px 0}
-  td,th{border:1px solid #e5e5e5;padding:6px 8px;text-align:left;vertical-align:top;font-size:13px}
-  th{background:#fafafa}
-  .prompt{display:flex;gap:8px;align-items:flex-start;margin:6px 0}
-  .prompt pre{flex:1;margin:0;white-space:pre-wrap}
-  button.btn{padding:6px 12px;border-radius:6px;border:1px solid #ccc;background:#fff;cursor:pointer;font-size:13px}
-  .steps{counter-reset:s;list-style:none;padding:0}
-  .steps > li{counter-increment:s;margin:14px 0;padding-left:34px;position:relative}
-  .steps > li::before{content:counter(s);position:absolute;left:0;top:0;width:24px;height:24px;border-radius:50%;background:#1b5fd1;color:#fff;
-    font-size:12px;font-weight:600;display:flex;align-items:center;justify-content:center}
-  .steps img{display:block;max-width:100%;border:1px solid #ddd;border-radius:6px;margin-top:6px}
-  nav.toc a{margin-right:12px;font-size:13px}
+*{box-sizing:border-box}
+html{scroll-padding-top:90px}
+body{font:15px/1.65 system-ui,-apple-system,Segoe UI,sans-serif;margin:0;color:#24334a;background:#fff}
+header{position:sticky;top:0;z-index:3;background:#fff;border-bottom:1px solid #dce3ed;padding:14px 24px;display:flex;justify-content:space-between;align-items:center}
+header h1{font-size:18px;margin:0}
+header small{color:#607089}
+.layout{display:grid;grid-template-columns:235px minmax(0,1fr)}
+nav.chapters{position:sticky;top:84px;height:calc(100vh - 84px);padding:24px 16px;background:#f7f9fc;border-right:1px solid #dce3ed}
+nav.chapters a{display:block;text-decoration:none;color:#40536e;padding:12px;border-radius:8px;margin:4px 0;font-weight:600;font-size:14px}
+nav.chapters a[aria-current=page]{background:#e5efff;color:#174fba}
+nav.chapters small{display:block;font-weight:400;color:#607089}
+main{min-width:0;max-width:1000px;padding:32px 40px 64px}
+.part[hidden]{display:none}
+h2{font-size:22px;line-height:1.3;margin:32px 0 12px}
+h3{font-size:17px;margin:20px 0 8px}
+.eyebrow{font-size:11px;letter-spacing:.14em;color:#536b89;font-weight:700;margin:0}
+.eyebrow+h2{font-size:30px;margin-top:6px}
+.lead{font-size:17px;color:#53657e}
+a{color:#1b5fd1}
+code{background:#f0f3f8;padding:2px 5px;border-radius:4px;overflow-wrap:anywhere;font-size:.87em}
+pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#f4f6fa;padding:16px;border-radius:8px;margin:0;font-size:13px}
+.prompt{display:flex;align-items:flex-start;gap:8px;margin:14px 0}
+.prompt pre{flex:1;min-width:0}
+.btn{border:1px solid #bdc9d9;background:#fff;border-radius:6px;padding:8px 12px;cursor:pointer;color:#24334a}
+.btn:hover{background:#eef4ff}
+.box{background:#f2f6fd;border:1px solid #d9e4f3;padding:18px 22px;border-radius:10px;margin:24px 0}
+.box p:last-child{margin-bottom:0}
+.toc{display:flex;gap:14px;flex-wrap:wrap;margin:24px 0}
+table{width:100%;border-collapse:collapse;font-size:14px;margin:16px 0}
+td,th{text-align:left;vertical-align:top;padding:12px;border-bottom:1px solid #dce3ed;overflow-wrap:anywhere}
+th{background:#f4f6fa}
+ul,ol{padding-left:24px}
+.steps{list-style:none;padding:0;counter-reset:step}
+.steps>li{counter-increment:step;border-top:1px solid #e0e7f0;padding:20px 0;margin-top:12px}
+.steps>li>h3{margin-top:0}
+.steps>li>h3:before{content:counter(step);display:inline-grid;place-items:center;background:#e7efff;color:#1b5fd1;border-radius:50%;width:28px;height:28px;margin-right:10px;font-size:14px}
+.result{border-left:3px solid #287d68;padding-left:12px;color:#326253;font-size:14px}
+figure{margin:18px 0}
+.screenshot{display:block;position:relative;padding:0;border:1px solid #d5deea;border-radius:8px;overflow:hidden;cursor:zoom-in;width:100%;background:#10161c}
+.screenshot img{display:block;width:100%;height:auto}
+.screenshot svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+.screenshot svg path{stroke:#ff3434;stroke-width:.55;fill:none}
+.screenshot svg .arrowhead{fill:#ff3434;stroke:none}
+.screenshot svg circle{fill:#c91622;stroke:#fff;stroke-width:.25;marker-end:none}
+.screenshot svg text{fill:#fff;font:bold 2.6px system-ui;text-anchor:middle;marker-end:none}
+figcaption{font-size:12px;color:#607089;margin-top:6px}
+details{border:1px solid #dce3ed;border-radius:8px;padding:14px 18px;margin:16px 0}
+summary{cursor:pointer;font-weight:600}
+.hint{font-size:13px;color:#607089}
+.token-demo{border:1px solid #dce3ed;border-radius:8px;padding:20px;background:#f8faff}
+.token-demo>div{display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin:10px 0}
+.token-demo strong{background:#1b5fd1;color:white;padding:5px 12px;border-radius:4px}
+.token-demo small{color:#607089}
+.architecture{border:1px solid #d9e4f3;background:#f6f9ff;padding:20px;border-radius:10px;text-align:center}
+.architecture>div{background:white;border:1px solid #dce3ed;border-radius:8px;padding:12px}
+.architecture span{display:block;margin:8px}
+.architecture .branches{display:flex;gap:10px;background:none;border:0;padding:14px 0 0}
+.branches>div{flex:1;border:1px solid #dce3ed;border-radius:8px;background:white;padding:10px}
+dialog{width:min(96vw,1800px);max-height:94vh;border:1px solid #bdc9d9;border-radius:10px;padding:16px}
+dialog::backdrop{background:#101a2ccc}
+dialog .btn{display:block;margin:0 0 12px auto}
+dialog figure{margin:0}
+dialog .screenshot{cursor:default}
+dialog .screenshot img{max-height:78vh;object-fit:contain}
+dialog .screenshot{width:max-content;max-width:100%;margin:auto}
+dialog .screenshot img{width:auto;max-width:100%}
+button:focus-visible,a:focus-visible,summary:focus-visible{outline:3px solid #2c70d4;outline-offset:3px}
+#announcement{position:fixed;bottom:16px;right:16px;background:#24334a;color:white;padding:10px 16px;border-radius:8px}
+#announcement:empty{display:none}
+@media(max-width:760px){header{padding:12px 16px}
+header small{display:none}
+.layout{display:block}
+nav.chapters{position:static;height:auto;display:flex;overflow:auto;border-right:0;padding:8px;gap:6px}
+nav.chapters a{min-width:160px;margin:0}
+main{padding:24px 16px 48px}
+.eyebrow+h2{font-size:26px}
+table{font-size:12px}
+td,th{padding:8px 5px}
+.architecture .branches{flex-direction:column}
+.prompt{flex-direction:column}
+.prompt pre{width:100%}
+}
+
 </style>
 </head>
 <body>
 <header>
-  <div class="bar"><h1>Anleitung: Jira Agent</h1><button class="btn" id="close">Schließen</button></div>
-  <nav class="tabs">
-    <button data-part="nutzen" class="active">A · Nutzen</button>
-    <button data-part="erweitern">B · Erweitern</button>
-    <button data-part="eigene-app">C · Eigene App</button>
-  </nav>
+<div>
+<h1>Jira Agent · Guide</h1><small>Einrichten, verstehen und weiterentwickeln</small>
+</div>
+<button class="btn" id="close">Schließen</button>
 </header>
+<div class="layout">
+<nav class="chapters" aria-label="Guide-Kapitel"><a href="#bootstrap" data-part="bootstrap" aria-current="page">Bootstrap your template<small>Einrichten & Jira verbinden</small></a><a href="#ai-development" data-part="ai-development">Develop with AI<small>Copilot & Genie</small></a><a href="#skills-guide" data-part="skills-guide">What are skills?<small>Abläufe speichern & teilen</small></a><a href="#infrastructure-guide" data-part="infrastructure-guide">App infrastructure<small>Ressourcen & Berechtigungen</small></a><a href="#nutzen" data-part="nutzen">Using the agent<small>Hilfe im Alltag</small></a>
+</nav>
 <main>
-
-<!-- ======================================================= A · NUTZEN -->
-<section class="part active" id="nutzen">
-<nav class="toc"><a href="#jira-token">Jira verbinden</a><a href="#fragen">Was kann ich fragen?</a><a href="#dateien">Dateien</a>
-  <a href="#skills">Skills</a><a href="#bestaetigen">Bestätigen</a><a href="#zahnrad">Einstellungen</a></nav>
-
-<h2 id="jira-token">1. Jira verbinden (einmal pro Sitzung)</h2>
-<ol>
-  <li>In Jira oben rechts auf Ihr <b>Profilbild → Profil</b> klicken.</li>
-  <li>Links <b>Personal Access Tokens → Token erstellen</b>. Namen vergeben (z. B. „Jira Agent“), Ablaufdatum wählen, erstellen.</li>
-  <li>Token kopieren und im Chat oben in das gelbe Feld <b>„Jira verbinden“</b> einfügen → <b>Verbinden</b>.</li>
+<section class="part" id="bootstrap">
+<p class="eyebrow">START HERE</p>
+<h2>Bootstrap your template</h2>
+<p class="lead">Von der Vorlage zur eigenen App und zur ersten Jira-Abfrage. Gehe die Abschnitte der Reihe nach durch.</p>
+<div class="box"><b>Bevor du beginnst</b>
+<ul>
+<li>Zugang zu deinem Databricks-Workspace und zu Jira.</li>
+<li>Berechtigung, einen Git-Ordner und eine Databricks App anzulegen.</li>
+<li>Zugriff auf Azure-OpenAI-Secret, SQL Warehouse und ein MLflow-Experiment. Lass die Ressourcen bei Bedarf vom Workspace-Admin freigeben.</li>
+</ul>
+<p>Die Namen und IDs für deinen Workspace stehen in <code>databricks.yml → variables</code>. Das sind keine Jira-Zugangsdaten.</p>
+</div>
+<nav class="toc" aria-label="Bootstrap-Schritte"><a href="#code-holen">1. Code holen</a><a href="#app-anlegen">2. App anlegen</a><a href="#zugriffe">3. Zugriffe</a><a href="#bereitstellen">4. Starten</a><a href="#jira-token">5. Jira verbinden</a>
+</nav>
+<h2 id="code-holen">1. Code in den Workspace holen</h2>
+<p>Für eine eigene Weiterentwicklung erst eine eigene Kopie des GitHub-Repos erstellen (z. B. über „Use this template“, falls verfügbar, oder einen Fork). Verwende dann deren URL. Die URL unten bindet die gemeinsame Vorlage ein.</p>
+<ol class="steps">
+<li>
+<h3>Workspace öffnen</h3>
+<p>Klicke links auf <b>Workspace</b> (1).</p>
+<figure>
+<button class="screenshot" type="button" aria-label="Bild vergrößern: 1 · Workspace in der linken Navigation"><img src="/jira/static/img/go_to_workspace.png" alt="1 · Workspace in der linken Navigation" loading="lazy">
+<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+<defs><marker id="arrow-go_to_workspace" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse">
+<path d="M0 0 L10 5 L0 10 Z" class="arrowhead"/></marker>
+</defs>
+<g style="marker-end:url(#arrow-go_to_workspace)">
+<path d="M51 23 L22 20"/>
+<circle cx="51" cy="23" r="2.2"/>
+<text x="51" y="23.8">1</text>
+</g>
+</svg>
+</button>
+<figcaption>1 · Workspace in der linken Navigation · Zum Vergrößern anklicken</figcaption>
+</figure>
+<p class="result"><b>Ergebnis:</b> Die Ordneransicht öffnet sich.</p>
+</li>
+<li>
+<h3>Deinen Benutzerordner öffnen</h3>
+<p>Klappe <b>Workspace → Users</b> auf. Wähle den Ordner mit deiner eigenen E-Mail (1).</p>
+<figure>
+<button class="screenshot" type="button" aria-label="Bild vergrößern: 1 · Dein Benutzerordner unter Users"><img src="/jira/static/img/open_your_workspace.png" alt="1 · Dein Benutzerordner unter Users" loading="lazy">
+<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+<defs><marker id="arrow-open_your_workspace" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse">
+<path d="M0 0 L10 5 L0 10 Z" class="arrowhead"/></marker>
+</defs>
+<g style="marker-end:url(#arrow-open_your_workspace)">
+<path d="M76 69 L62 53"/>
+<circle cx="76" cy="69" r="2.2"/>
+<text x="76" y="69.8">1</text>
+</g>
+</svg>
+</button>
+<figcaption>1 · Dein Benutzerordner unter Users · Zum Vergrößern anklicken</figcaption>
+</figure>
+<p class="result"><b>Ergebnis:</b> Du siehst deine Dateien und Ordner.</p>
+</li>
+<li>
+<h3>Ordneraktionen öffnen</h3>
+<p>Fahre über deinen Benutzerordner und klicke rechts auf die <b>drei Punkte ⋮</b> (1).</p>
+<figure>
+<button class="screenshot" type="button" aria-label="Bild vergrößern: 1 · Drei Punkte am Benutzerordner"><img src="/jira/static/img/click_three_dots.png" alt="1 · Drei Punkte am Benutzerordner" loading="lazy">
+<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+<defs><marker id="arrow-click_three_dots" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse">
+<path d="M0 0 L10 5 L0 10 Z" class="arrowhead"/></marker>
+</defs>
+<g style="marker-end:url(#arrow-click_three_dots)">
+<path d="M77 76 L93 56"/>
+<circle cx="77" cy="76" r="2.2"/>
+<text x="77" y="76.8">1</text>
+</g>
+</svg>
+</button>
+<figcaption>1 · Drei Punkte am Benutzerordner · Zum Vergrößern anklicken</figcaption>
+</figure>
+<p class="result"><b>Ergebnis:</b> Das Aktionsmenü erscheint.</p>
+</li>
+<li>
+<h3>Git-Ordner wählen</h3>
+<p>Wähle <b>Erstellen</b> (1) und anschließend <b>Git-Ordner</b> (2).</p>
+<figure>
+<button class="screenshot" type="button" aria-label="Bild vergrößern: 1 · Erstellen → 2 · Git-Ordner"><img src="/jira/static/img/create_git_folder.png" alt="1 · Erstellen → 2 · Git-Ordner" loading="lazy">
+<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+<defs><marker id="arrow-create_git_folder" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse">
+<path d="M0 0 L10 5 L0 10 Z" class="arrowhead"/></marker>
+</defs>
+<g style="marker-end:url(#arrow-create_git_folder)">
+<path d="M48 12 L46 23"/>
+<circle cx="48" cy="12" r="2.2"/>
+<text x="48" y="12.8">1</text>
+<path d="M88 39 L78 28"/>
+<circle cx="88" cy="39" r="2.2"/>
+<text x="88" y="39.8">2</text>
+</g>
+</svg>
+</button>
+<figcaption>1 · Erstellen → 2 · Git-Ordner · Zum Vergrößern anklicken</figcaption>
+</figure>
+<p class="result"><b>Ergebnis:</b> Der Dialog „Git-Ordner erstellen“ öffnet sich.</p>
+</li>
+<li>
+<h3>Repository-URL einfügen</h3>
+<p>Füge die URL ein (1). Prüfe Git-Anbieter und Ordnernamen, dann klicke <b>Git-Ordner erstellen</b> (2).</p>
+<div class="prompt"><pre>https://github.com/CariadNayon/jira-agent-template.git</pre>
+<button class="btn" data-copy>Kopieren</button>
+</div>
+<figure>
+<button class="screenshot" type="button" aria-label="Bild vergrößern: 1 · Repository-URL → 2 · Git-Ordner erstellen"><img src="/jira/static/img/add_this_url.png" alt="1 · Repository-URL → 2 · Git-Ordner erstellen" loading="lazy">
+<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+<defs><marker id="arrow-add_this_url" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse">
+<path d="M0 0 L10 5 L0 10 Z" class="arrowhead"/></marker>
+</defs>
+<g style="marker-end:url(#arrow-add_this_url)">
+<path d="M35 29 L37 41"/>
+<circle cx="35" cy="29" r="2.2"/>
+<text x="35" y="29.8">1</text>
+<path d="M79 88 L85 73"/>
+<circle cx="79" cy="88" r="2.2"/>
+<text x="79" y="88.8">2</text>
+</g>
+</svg>
+</button>
+<figcaption>1 · Repository-URL → 2 · Git-Ordner erstellen · Zum Vergrößern anklicken</figcaption>
+</figure>
+<p class="result"><b>Ergebnis:</b> Der Git-Ordner erscheint in deinem Benutzerordner.</p>
+</li>
 </ol>
-<p class="hint">Der Token liegt nur im Arbeitsspeicher der App und gilt nur für Sie. Nach einem Neustart der App, nach dem Abmelden
-  oder spätestens nach 8 Stunden fragt der Agent erneut danach.</p>
+<h2 id="app-anlegen">2. Eigene App anlegen</h2>
+<ol class="steps">
+<li>
+<h3>Databricks-Apps öffnen</h3>
+<p>Öffne oben rechts das Produktmenü (1) und wähle <b>Databricks-Apps</b> (2).</p>
+<figure>
+<button class="screenshot" type="button" aria-label="Bild vergrößern: 1 · Produktmenü → 2 · Databricks-Apps"><img src="/jira/static/img/now_go_to_apps.png" alt="1 · Produktmenü → 2 · Databricks-Apps" loading="lazy">
+<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+<defs><marker id="arrow-now_go_to_apps" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse">
+<path d="M0 0 L10 5 L0 10 Z" class="arrowhead"/></marker>
+</defs>
+<g style="marker-end:url(#arrow-now_go_to_apps)">
+<path d="M92 14 L95 7"/>
+<circle cx="92" cy="14" r="2.2"/>
+<text x="92" y="14.8">1</text>
+<path d="M85 73 L88 50"/>
+<circle cx="85" cy="73" r="2.2"/>
+<text x="85" y="73.8">2</text>
+</g>
+</svg>
+</button>
+<figcaption>1 · Produktmenü → 2 · Databricks-Apps · Zum Vergrößern anklicken</figcaption>
+</figure>
+<p class="result"><b>Ergebnis:</b> Die App-Übersicht erscheint.</p>
+</li>
+<li>
+<h3>Neue App erstellen</h3>
+<p>Klicke rechts oben auf <b>App erstellen</b> (1).</p>
+<figure>
+<button class="screenshot" type="button" aria-label="Bild vergrößern: 1 · App erstellen"><img src="/jira/static/img/create_new_app.png" alt="1 · App erstellen" loading="lazy">
+<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+<defs><marker id="arrow-create_new_app" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse">
+<path d="M0 0 L10 5 L0 10 Z" class="arrowhead"/></marker>
+</defs>
+<g style="marker-end:url(#arrow-create_new_app)">
+<path d="M85 25 L94 16"/>
+<circle cx="85" cy="25" r="2.2"/>
+<text x="85" y="25.8">1</text>
+</g>
+</svg>
+</button>
+<figcaption>1 · App erstellen · Zum Vergrößern anklicken</figcaption>
+</figure>
+<p class="result"><b>Ergebnis:</b> Die Auswahl zum Erstellen einer App öffnet sich.</p>
+</li>
+<li>
+<h3>Benutzerdefinierte App auswählen</h3>
+<p>Klicke die Kachel <b>Benutzerdefinierte App erstellen</b> (1).</p>
+<figure>
+<button class="screenshot" type="button" aria-label="Bild vergrößern: 1 · Benutzerdefinierte App erstellen"><img src="/jira/static/img/choose_custom_app.png" alt="1 · Benutzerdefinierte App erstellen" loading="lazy">
+<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+<defs><marker id="arrow-choose_custom_app" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse">
+<path d="M0 0 L10 5 L0 10 Z" class="arrowhead"/></marker>
+</defs>
+<g style="marker-end:url(#arrow-choose_custom_app)">
+<path d="M65 39 L59 24"/>
+<circle cx="65" cy="39" r="2.2"/>
+<text x="65" y="39.8">1</text>
+</g>
+</svg>
+</button>
+<figcaption>1 · Benutzerdefinierte App erstellen · Zum Vergrößern anklicken</figcaption>
+</figure>
+<p class="result"><b>Ergebnis:</b> Du kannst den Namen deiner App eingeben.</p>
+</li>
+<li>
+<h3>App benennen</h3>
+<p>Vergib einen eigenen Namen mit Kleinbuchstaben, Ziffern und Bindestrichen, z. B. <code>agent-jira-team-x</code> (1). Klicke <b>App erstellen</b> (2).</p>
+<figure>
+<button class="screenshot" type="button" aria-label="Bild vergrößern: 1 · App-Name → 2 · App erstellen"><img src="/jira/static/img/give_it_a_name.png" alt="1 · App-Name → 2 · App erstellen" loading="lazy">
+<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+<defs><marker id="arrow-give_it_a_name" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse">
+<path d="M0 0 L10 5 L0 10 Z" class="arrowhead"/></marker>
+</defs>
+<g style="marker-end:url(#arrow-give_it_a_name)">
+<path d="M80 31 L58 41"/>
+<circle cx="80" cy="31" r="2.2"/>
+<text x="80" y="31.8">1</text>
+<path d="M87 68 L84 82"/>
+<circle cx="87" cy="68" r="2.2"/>
+<text x="87" y="68.8">2</text>
+</g>
+</svg>
+</button>
+<figcaption>1 · App-Name → 2 · App erstellen · Zum Vergrößern anklicken</figcaption>
+</figure>
+<p class="result"><b>Ergebnis:</b> Deine App ist angelegt; der Code ist noch nicht bereitgestellt.</p>
+</li>
+</ol>
+<h2 id="zugriffe">3. Ressourcen und Benutzerzugriffe einrichten</h2>
+<p>Öffne in der neuen App die Ressourcen-Konfiguration (je nach Workspace unter <b>Konfigurieren</b> oder <b>Einstellungen</b>). Füge diese Ressourcen hinzu. Die Ressourcennamen müssen genau übereinstimmen:</p>
+<table>
+<tr>
+<th>Name in der App</th>
+<th>Auswahl</th>
+<th>App-Berechtigung</th>
+</tr>
+<tr>
+<td><code>secret</code>
+</td>
+<td>Secret Scope und Key aus <code>variables.secret_scope</code> und <code>variables.secret_key</code>
+</td>
+<td>READ</td>
+</tr>
+<tr>
+<td><code>sql-warehouse</code>
+</td>
+<td>Warehouse aus <code>variables.warehouse_id</code>
+</td>
+<td>CAN_USE</td>
+</tr>
+<tr>
+<td><code>experiment</code>
+</td>
+<td>MLflow-Experiment für diese App</td>
+<td>CAN_MANAGE wie im Bundle</td>
+</tr>
+</table>
+<p>Öffne <b>Autorisierung → Benutzerautorisierung</b>. Füge die folgenden fünf Scopes hinzu. Ein Scope erlaubt der App eine bestimmte API im Namen des Benutzers aufzurufen.</p>
+<div class="prompt"><pre>sql:restricted-query
+catalog.catalogs:read
+catalog.schemas:read
+catalog.tables:read
+workspace.workspace</pre>
+<button class="btn" data-copy>Kopieren</button>
+</div>
+<p class="result"><b>Ergebnis:</b> Alle drei Ressourcen und fünf Scopes sind gespeichert. Bei der Anmeldung kann die App die Benutzerfreigabe anfordern.</p>
+<p>Für diesen Teil fehlen noch Screenshots. Die Schritte sind deshalb als Text beschrieben. Details stehen unter <a href="#infrastructure">App infrastructure &amp; permissions</a>.</p>
+<h2 id="bereitstellen">4. Code bereitstellen und App öffnen</h2>
+<ol class="steps">
+<li>
+<h3>Bereitstellung öffnen</h3>
+<p>Klicke in der App-Übersicht rechts oben auf <b>Anwenden</b> bzw. <b>Bereitstellen</b> (1).</p>
+<figure>
+<button class="screenshot" type="button" aria-label="Bild vergrößern: 1 · Anwenden"><img src="/jira/static/img/click_apply.png" alt="1 · Anwenden" loading="lazy">
+<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+<defs><marker id="arrow-click_apply" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse">
+<path d="M0 0 L10 5 L0 10 Z" class="arrowhead"/></marker>
+</defs>
+<g style="marker-end:url(#arrow-click_apply)">
+<path d="M88 23 L96 13"/>
+<circle cx="88" cy="23" r="2.2"/>
+<text x="88" y="23.8">1</text>
+</g>
+</svg>
+</button>
+<figcaption>1 · Anwenden · Zum Vergrößern anklicken</figcaption>
+</figure>
+<p class="result"><b>Ergebnis:</b> Der Dialog für den Quellcode-Pfad erscheint.</p>
+</li>
+<li>
+<h3>Quellcode suchen</h3>
+<p>Klicke auf das <b>Ordnersymbol</b> (1).</p>
+<figure>
+<button class="screenshot" type="button" aria-label="Bild vergrößern: 1 · Ordnersymbol neben dem Quellcode-Pfad"><img src="/jira/static/img/choose_source.png" alt="1 · Ordnersymbol neben dem Quellcode-Pfad" loading="lazy">
+<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+<defs><marker id="arrow-choose_source" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse">
+<path d="M0 0 L10 5 L0 10 Z" class="arrowhead"/></marker>
+</defs>
+<g style="marker-end:url(#arrow-choose_source)">
+<path d="M74 27 L81 45"/>
+<circle cx="74" cy="27" r="2.2"/>
+<text x="74" y="27.8">1</text>
+</g>
+</svg>
+</button>
+<figcaption>1 · Ordnersymbol neben dem Quellcode-Pfad · Zum Vergrößern anklicken</figcaption>
+</figure>
+<p class="result"><b>Ergebnis:</b> Die Ordnerauswahl öffnet sich.</p>
+</li>
+<li>
+<h3>Git-Ordner auswählen</h3>
+<p>Wähle unter deinem Benutzerordner <b>jira-agent-template</b> bzw. deine eigene Kopie (1). Klicke <b>Auswählen</b> (2) und im vorherigen Dialog <b>Anwenden</b>.</p>
+<figure>
+<button class="screenshot" type="button" aria-label="Bild vergrößern: 1 · Git-Ordner → 2 · Auswählen"><img src="/jira/static/img/choose_template.png" alt="1 · Git-Ordner → 2 · Auswählen" loading="lazy">
+<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+<defs><marker id="arrow-choose_template" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse">
+<path d="M0 0 L10 5 L0 10 Z" class="arrowhead"/></marker>
+</defs>
+<g style="marker-end:url(#arrow-choose_template)">
+<path d="M55 42 L39 53"/>
+<circle cx="55" cy="42" r="2.2"/>
+<text x="55" y="42.8">1</text>
+<path d="M76 76 L92 90"/>
+<circle cx="76" cy="76" r="2.2"/>
+<text x="76" y="76.8">2</text>
+</g>
+</svg>
+</button>
+<figcaption>1 · Git-Ordner → 2 · Auswählen · Zum Vergrößern anklicken</figcaption>
+</figure>
+<p class="result"><b>Ergebnis:</b> Die Bereitstellung startet. Warte, bis der Status „Wird ausgeführt“ erscheint.</p>
+</li>
+<li>
+<h3>App öffnen</h3>
+<p>Klicke neben dem grünen App-Status auf die <b>App-URL</b> (1). Melde dich an und bestätige ggf. die Benutzerautorisierung.</p>
+<figure>
+<button class="screenshot" type="button" aria-label="Bild vergrößern: 1 · URL der gestarteten App"><img src="/jira/static/img/click_link_to_open_app.png" alt="1 · URL der gestarteten App" loading="lazy">
+<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+<defs><marker id="arrow-click_link_to_open_app" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse">
+<path d="M0 0 L10 5 L0 10 Z" class="arrowhead"/></marker>
+</defs>
+<g style="marker-end:url(#arrow-click_link_to_open_app)">
+<path d="M58 20 L58 32"/>
+<circle cx="58" cy="20" r="2.2"/>
+<text x="58" y="20.8">1</text>
+</g>
+</svg>
+</button>
+<figcaption>1 · URL der gestarteten App · Zum Vergrößern anklicken</figcaption>
+</figure>
+<p class="result"><b>Ergebnis:</b> Du siehst den Chat und das Feld „Jira verbinden“.</p>
+</li>
+</ol>
+<h2 id="jira-token">5. Jira-Token erstellen und einfügen</h2>
+<p>Der Jira-Token ist dein persönlicher Zugang zu Jira. Er ist unabhängig vom Azure-Key und den Databricks-Scopes. Die folgenden Bilder zeigen die Jira-Oberfläche dieser Installation.</p>
+<ol class="steps">
+<li>
+<h3>Token-Verwaltung öffnen</h3>
+<p>Öffne Jira im Browser. Klicke oben rechts auf dein <b>Profilbild</b> (1), dann auf <b>API Token Authentication</b> (2). In anderen Jira-Versionen heißt der Bereich ggf. „Personal Access Tokens“ im Profil.</p>
+<figure>
+<button class="screenshot" type="button" aria-label="Bild vergrößern: 1 · Profilbild → 2 · API Token Authentication"><img src="/jira/static/img/go_to_jira_click_api_token_auth.png" alt="1 · Profilbild → 2 · API Token Authentication" loading="lazy">
+<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+<defs><marker id="arrow-go_to_jira_click_api_token_auth" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse">
+<path d="M0 0 L10 5 L0 10 Z" class="arrowhead"/></marker>
+</defs>
+<g style="marker-end:url(#arrow-go_to_jira_click_api_token_auth)">
+<path d="M94 10 L98.7 3.5"/>
+<circle cx="94" cy="10" r="2.2"/>
+<text x="94" y="10.8">1</text>
+<path d="M80 28 L94 19.5"/>
+<circle cx="80" cy="28" r="2.2"/>
+<text x="80" y="28.8">2</text>
+</g>
+</svg>
+</button>
+<figcaption>1 · Profilbild → 2 · API Token Authentication · Zum Vergrößern anklicken</figcaption>
+</figure>
+<p class="result"><b>Ergebnis:</b> Die Seite „My API tokens“ erscheint.</p>
+</li>
+<li>
+<h3>Neuen Token anlegen</h3>
+<p>Klicke auf <b>New API Token</b> (1).</p>
+<figure>
+<button class="screenshot" type="button" aria-label="Bild vergrößern: 1 · New API Token"><img src="/jira/static/img/create_new_token.png" alt="1 · New API Token" loading="lazy">
+<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+<defs><marker id="arrow-create_new_token" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse">
+<path d="M0 0 L10 5 L0 10 Z" class="arrowhead"/></marker>
+</defs>
+<g style="marker-end:url(#arrow-create_new_token)">
+<path d="M76 48 L85 59"/>
+<circle cx="76" cy="48" r="2.2"/>
+<text x="76" y="48.8">1</text>
+</g>
+</svg>
+</button>
+<figcaption>1 · New API Token · Zum Vergrößern anklicken</figcaption>
+</figure>
+<p class="result"><b>Ergebnis:</b> Das Formular für einen neuen Token öffnet sich.</p>
+</li>
+<li>
+<h3>Name, Ablauf und Rechte wählen</h3>
+<p>Vergib einen erkennbaren Namen, z. B. „Mein Jira Agent“ (1), und wähle ein Ablaufdatum nach euren Vorgaben. Für Kommentare und andere Änderungen brauchst du <b>Read &amp; Write</b> (2); für reine Abfragen genügt <b>Read Only</b>. Klicke <b>Create API Token</b> (3).</p>
+<figure>
+<button class="screenshot" type="button" aria-label="Bild vergrößern: 1 · Name → 2 · Rechte → 3 · Create API Token"><img src="/jira/static/img/read_and_write_rights.png" alt="1 · Name → 2 · Rechte → 3 · Create API Token" loading="lazy">
+<svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+<defs><marker id="arrow-read_and_write_rights" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse">
+<path d="M0 0 L10 5 L0 10 Z" class="arrowhead"/></marker>
+</defs>
+<g style="marker-end:url(#arrow-read_and_write_rights)">
+<path d="M66 12 L36 17"/>
+<circle cx="66" cy="12" r="2.2"/>
+<text x="66" y="12.8">1</text>
+<path d="M43 50 L20 54"/>
+<circle cx="43" cy="50" r="2.2"/>
+<text x="43" y="50.8">2</text>
+<path d="M42 83 L25 77"/>
+<circle cx="42" cy="83" r="2.2"/>
+<text x="42" y="83.8">3</text>
+</g>
+</svg>
+</button>
+<figcaption>1 · Name → 2 · Rechte → 3 · Create API Token · Zum Vergrößern anklicken</figcaption>
+</figure>
+<p class="result"><b>Ergebnis:</b> Jira zeigt den neuen Token einmalig an.</p>
+</li>
+<li>
+<h3>Token kopieren</h3>
+<p>Kopiere den erzeugten Token über das Kopiersymbol, bevor du die Jira-Seite verlässt. Bewahre ihn nach euren Vorgaben sicher auf. Füge ihn weder in den Chat noch in Screenshots oder den Code ein.</p>
+<div class="token-demo" role="img" aria-label="Neutrale Darstellung: Token-Feld mit verdecktem Inhalt und Kopiersymbol"><span>Dein neuer Jira-Token</span>
+<div><code>••••••••••••••••••••••••</code><span aria-hidden="true"> ⧉</span>
+</div><small>Schematische Darstellung, kein echter Token</small>
+</div>
+<p class="result"><b>Ergebnis:</b> Der Token liegt in deiner Zwischenablage.</p>
+</li>
+<li>
+<h3>Token in der App einfügen</h3>
+<p>Wechsle zurück zur App. Füge den Token im oberen Feld <b>„Jira verbinden“</b> ein und klicke <b>Verbinden</b>. Alternativ: Zahnrad → Zugänge → Jira-Token.</p>
+<div class="token-demo" role="img" aria-label="Neutrale Darstellung des Jira-Banners: Token einfügen, dann Verbinden"><b>Jira verbinden</b>
+<div><code>1 · Jira-Token hier einfügen …</code><strong>2 · Verbinden</strong>
+</div><small>Schematische Darstellung des Verbindungsablaufs</small>
+</div>
+<p class="result"><b>Ergebnis:</b> Die App meldet „Jira verbunden“ und zeigt deinen Jira-Benutzernamen.</p>
+</li>
+<li>
+<h3>Erste Abfrage testen</h3>
+<div class="prompt"><pre>Zeig meine offenen Jira-Tickets.</pre>
+<button class="btn" data-copy>Kopieren</button>
+</div>
+<p class="result"><b>Ergebnis:</b> Der Agent liefert Tickets oder meldet, dass keine gefunden wurden. Er nimmt dabei keine Änderungen vor.</p>
+</li>
+</ol>
+<div class="box"><b>Nach Neustart oder Deployment</b>
+<p>Der Jira-Token liegt nur im Arbeitsspeicher. Nach einem Neustart, nach dem Abmelden oder spätestens nach 8 Stunden musst du ihn erneut einfügen. Ein abgelaufener oder widerrufener Token muss in Jira neu erstellt werden.</p>
+</div>
+<details>
+<summary>Aktualisieren und für andere freigeben</summary>
+<p>Git-Ordner öffnen → Branch → <b>Pull</b>. Dann die App erneut bereitstellen und mit <b>Strg+Shift+R</b> neu laden. Unter <b>Teilen / Berechtigungen</b> legst du fest, wer die App nutzen darf. Jira- und Tabellenrechte erhalten andere dadurch nicht automatisch.</p>
+</details>
+</section>
+<section class="part" id="ai-development" hidden>
+<p class="eyebrow">BUILD</p>
+<h2>Develop your agent with AI</h2>
+<p class="lead">Beschreibe eine konkrete Aufgabe. Lass dir die Änderung erklären und prüfe sie, bevor du sie bereitstellst.</p>
+<div class="box"><b>Empfohlen: GitHub Copilot in VS Code</b>
+<p>Hier kann der Assistent Projektdateien bearbeiten und Tests ausführen. Genie hilft bei Datenfragen. Falls in eurem Workspace <b>Genie Code</b> verfügbar ist, kannst du es für unterstützte Entwicklungsaufgaben verwenden; Funktionsumfang und Dateizugriff hängen vom Workspace ab.</p>
+</div>
+<ol class="steps">
+<li>
+<h3>Eigene Projektkopie öffnen</h3>
+<p>Öffne deine Kopie des Repos in VS Code und starte Copilot Chat. Nutze für Dateiänderungen den Agent-Modus, sofern verfügbar. Lokal brauchst du <b>uv ≥ 0.9.17, Node.js 20+ und Databricks CLI</b>.</p>
+<p class="result"><b>Ergebnis:</b> Copilot kann die Dateien deiner Projektkopie lesen.</p>
+</li>
+<li>
+<h3>Projektregeln mitgeben</h3>
+<p>Verlasse dich nicht darauf, dass der Assistent alle Regeln automatisch lädt. Hänge <code>AGENTS.md</code> an den Chat an oder fordere ausdrücklich das Lesen an.</p>
+<div class="prompt"><pre>Lies zuerst AGENTS.md und die zur Aufgabe passende Anleitung in .claude/skills/. Erkläre kurz, wie dieses Projekt aufgebaut ist. Ändere noch nichts.</pre>
+<button class="btn" data-copy>Kopieren</button>
+</div>
+<p class="result"><b>Ergebnis:</b> Der Assistent kennt Projektaufbau und Sicherheitsregeln.</p>
+</li>
+<li>
+<h3>Umgebung einrichten</h3>
+<div class="prompt"><pre>Richte das Projekt nach .claude/skills/einrichten/SKILL.md ein. Nutze meinen Databricks-Workspace und frage nach der URL, falls sie fehlt. Lege keine zusätzliche Datenbank an.</pre>
+<button class="btn" data-copy>Kopieren</button>
+</div>
+<p class="result"><b>Ergebnis:</b> Die lokale Konfiguration und Databricks-Anmeldung sind eingerichtet.</p>
+</li>
+<li>
+<h3>Eine Änderung beschreiben</h3>
+<div class="prompt"><pre>Baue ein Tool, das den Status eines Jira-Tickets ändert. Beispiel: ABC-123 auf „In Arbeit“. Lies .claude/skills/neues-tool/SKILL.md. Verwende die vorhandenen Jira-Helfer und write=True. Ergänze Tests ohne echtes Jira und führe sie aus.</pre>
+<button class="btn" data-copy>Kopieren</button>
+</div>
+<p class="result"><b>Ergebnis:</b> Du erhältst eine überschaubare Änderung und Testergebnisse.</p>
+</li>
+<li>
+<h3>Prüfen, lokal testen und bereitstellen</h3>
+<p>Lass dir die geänderten Dateien und das Verhalten erklären. Teste eine lesende Anfrage und die Bestätigungsabfrage vor einer Änderung. Erst danach deployen.</p>
+<div class="prompt"><pre>Führe uv run pytest tests -q aus und starte die App lokal. Zeige mir, wie ich die Änderung prüfe. Deploye noch nicht.</pre>
+<button class="btn" data-copy>Kopieren</button>
+</div>
+<div class="prompt"><pre>Die Änderung ist geprüft. Lies .claude/skills/deploy/SKILL.md, prüfe das Deploy und stelle die App bereit.</pre>
+<button class="btn" data-copy>Kopieren</button>
+</div>
+<p class="result"><b>Ergebnis:</b> Die geprüfte Version ist erreichbar. Nach dem Deploy Jira erneut verbinden.</p>
+</li>
+</ol>
+<details>
+<summary>Was lässt sich ohne Code ändern?</summary>
+<p>Über das Zahnrad kannst du Name, Modell, Regeln, freigegebene Tabellen und persönliche Skills ändern. Neue Aktionen brauchen ein Tool in <code>jira_agent/tools/</code>. Eine gespeicherte Anleitung für bestehende Aktionen braucht einen Skill.</p>
+</details>
+<details>
+<summary>Wo wird entwickelt?</summary>
+<table>
+<tr>
+<th>Datei</th>
+<th>Aufgabe</th>
+</tr>
+<tr>
+<td><code>jira_agent/tools/</code>
+</td>
+<td>Neue Aktionen; Vorlage <code>example_custom_tool.py</code>
+</td>
+</tr>
+<tr>
+<td><code>tests/</code>
+</td>
+<td>Verhalten ohne echtes Jira prüfen</td>
+</tr>
+<tr>
+<td><code>jira_agent/config.yaml</code>
+</td>
+<td>Jira-URL, Modell und Limits</td>
+</tr>
+<tr>
+<td><code>databricks.yml → variables</code>
+</td>
+<td>App-Name, Secret und Warehouse</td>
+</tr>
+</table>
+</details>
+</section>
+<section class="part" id="skills-guide" hidden>
+<p class="eyebrow">UNDERSTAND</p>
+<h2>What are skills?</h2>
+<p class="lead">Ein Skill ist eine gespeicherte Anleitung für eine wiederkehrende Aufgabe. Du rufst ihn im Chat mit <code>/name</code> auf.</p>
+<div class="box"><b>Beispiel: Wochenreport</b>
+<p>Statt jede Woche dieselbe Anleitung zu schreiben, sendest du <code>/wochenreport letzte Woche</code>. Der Agent erhält den gespeicherten Ablauf und deine Ergänzung.</p>
+</div>
+<table>
+<tr>
+<th>Begriff</th>
+<th>Beispiel</th>
+<th>Was passiert?</th>
+</tr>
+<tr>
+<td>Tool</td>
+<td>Jira-Tickets suchen</td>
+<td>Python-Code ruft Jira auf.</td>
+</tr>
+<tr>
+<td>Skill</td>
+<td>Wochenreport</td>
+<td>Eine Anleitung legt fest, welche Tickets gesucht und wie sie zusammengefasst werden.</td>
+</tr>
+<tr>
+<td>Regel</td>
+<td>„Antworten auf Deutsch“</td>
+<td>Eine allgemeine Vorgabe aus den Einstellungen gilt für die Unterhaltung.</td>
+</tr>
+</table>
+<p>Ein Skill fügt keine neuen technischen Fähigkeiten oder Zugriffsrechte hinzu. Jira-Änderungen brauchen weiterhin die Bestätigung <code>ja CODE</code>.</p>
+<h3>Vorhandenen Skill verwenden</h3>
+<ol>
+<li>Im Chat <code>/</code> tippen.</li>
+<li>Einen Skill auswählen, z. B. <code>/triage</code>, <code>/wochenreport</code> oder <code>/ticket-zusammenfassung</code>.</li>
+<li>Bei Bedarf Ticket oder Zeitraum ergänzen und senden.</li>
+</ol>
+<h3>Persönlichen Skill anlegen</h3>
+<p>Öffne <b>Zahnrad → Skills → + Neuer Skill</b>. Gib einen Namen, eine Kurzbeschreibung und die Anleitung ein. Beispiel:</p>
+<div class="prompt"><pre>Name: ticket-check
+Beschreibung: Prüft, ob ein Ticket verständlich beschrieben ist
 
+1. Lies das angegebene Ticket.
+2. Prüfe, ob Problem, erwartetes Verhalten und Schritte zur Reproduktion vorhanden sind.
+3. Liste fehlende Angaben auf. Ändere das Ticket nicht.</pre>
+<button class="btn" data-copy>Kopieren</button>
+</div>
+<p>Speichere den Skill und nutze <code>/ticket-check ABC-123</code>. Persönliche Skills sind für dich bestimmt und werden mit deinen Databricks-Rechten in deinem Workspace-Benutzerordner gespeichert.</p>
+<h3 id="team-skill">Einen Skill mit dem Team teilen</h3>
+<ol>
+<li>Beim persönlichen Skill <b>Für Team vorschlagen</b> wählen. Das lädt eine Markdown-Datei herunter; es veröffentlicht sie noch nicht.</li>
+<li>Die Datei im KI-Chat deiner Projektkopie anhängen und diesen Auftrag senden:</li>
+</ol>
+<div class="prompt"><pre>Lies AGENTS.md und .claude/skills/team-skill/SKILL.md. Übernimm den angehängten Skill nach skills/, prüfe das Format und führe die Tests aus. Zeige mir die Änderung vor dem Deploy.</pre>
+<button class="btn" data-copy>Kopieren</button>
+</div>
+<p>Nach Prüfung und Deployment sehen die Nutzer dieser App den Team-Skill in der <code>/</code>-Liste. Bei gleichem Namen hat der Team-Skill Vorrang.</p>
+<details>
+<summary>Skill-Datei für Entwickler</summary><pre>---
+name: ticket-check
+beschreibung: Prüft ein Ticket auf fehlende Angaben
+---
+1. Lies das angegebene Ticket.
+2. Nenne fehlende Angaben, ohne das Ticket zu ändern.</pre>
+<p>App-Skills in <code>skills/</code> steuern den Jira-Agenten. Die Entwicklungsanleitungen in <code>.claude/skills/</code> richten sich dagegen an den KI-Assistenten, der den Code bearbeitet.</p>
+</details>
+</section>
+<section class="part" id="infrastructure-guide" hidden>
+<p class="eyebrow">REFERENCE</p>
+<h2 id="infrastructure">App infrastructure &amp; permissions</h2>
+<p class="lead">Die App nutzt zwei Arten von Zugriff: eigene App-Ressourcen für den Betrieb und deine persönlichen Rechte für Jira und Daten.</p>
+<div class="architecture" aria-label="Datenwege der App">
+<div>Du im Browser</div><span>↓ Databricks-Anmeldung</span>
+<div>Chat-Oberfläche → Python-Agent</div>
+<div class="branches">
+<div>Jira<br><small>Dein Jira-Token</small>
+</div>
+<div>SQL Warehouse → Unity Catalog<br><small>Deine Databricks-Rechte</small>
+</div>
+<div>Azure OpenAI · MLflow<br><small>App-Ressourcen</small>
+</div>
+</div>
+</div>
+<h3>Welche Komponente macht was?</h3>
+<table>
+<tr>
+<th>Baustein</th>
+<th>Zweck</th>
+<th>Konfiguration / Rechte</th>
+</tr>
+<tr>
+<td>Databricks App</td>
+<td>Hostet Chat und Python-Agent.</td>
+<td>App-Name in <code>databricks.yml → variables.app_name</code>; Nutzung unter Teilen freigeben.</td>
+</tr>
+<tr>
+<td>App-Service-Principal</td>
+<td>Technische Identität der App.</td>
+<td>Zugriff auf die zugewiesenen Ressourcen; ersetzt keine Benutzerrechte auf Tabellen.</td>
+</tr>
+<tr>
+<td>Azure OpenAI</td>
+<td>Erzeugt Antworten und wählt Tools.</td>
+<td>Endpoint/Deployment in <code>jira_agent/config.yaml</code>; Team-Key aus Ressource <code>secret</code>.</td>
+</tr>
+<tr>
+<td>Secret Scope</td>
+<td>Bewahrt den Azure-Key auf.</td>
+<td>Scope = Gruppe von Secrets; Key = Eintrag darin. App-Ressource <code>secret</code> braucht READ. Werte in <code>variables.secret_scope/secret_key</code>.</td>
+</tr>
+<tr>
+<td>SQL Warehouse</td>
+<td>Führt lesende SQL-Abfragen aus.</td>
+<td>Ressource <code>sql-warehouse</code>, ID in <code>variables.warehouse_id</code>. App: CAN_USE; auch der Benutzer benötigt CAN_USE.</td>
+</tr>
+<tr>
+<td>Unity Catalog</td>
+<td>Verwaltet Kataloge, Schemas und Tabellen.</td>
+<td>Benutzer benötigt USE CATALOG, USE SCHEMA und SELECT auf den jeweiligen Objekten sowie die Freigabe unter Zahnrad → Datenquellen.</td>
+</tr>
+<tr>
+<td>MLflow-Experiment</td>
+<td>Speichert Traces zur Fehlersuche.</td>
+<td>Ressource <code>experiment</code>; Bundle nutzt CAN_MANAGE. Traces können Chat-, Ticket- und Abfrageinhalte enthalten. Zugriff gezielt vergeben.</td>
+</tr>
+<tr>
+<td>Jira</td>
+<td>Liest und bearbeitet Tickets.</td>
+<td>Persönlicher Jira-Token. Jira-Projektberechtigungen gelten weiterhin.</td>
+</tr>
+</table>
+<h3>Benutzer-Scopes: erlaubte APIs</h3>
+<p>Die App fragt bei der Benutzerautorisierung diese API-Bereiche an. Sie erweitern deine eigenen Berechtigungen nicht.</p>
+<table>
+<tr>
+<th>Scope</th>
+<th>Verwendung</th>
+</tr>
+<tr>
+<td><code>sql:restricted-query</code>
+</td>
+<td>Lesende Abfragen mit deinen Rechten.</td>
+</tr>
+<tr>
+<td><code>catalog.catalogs:read</code>
+</td>
+<td>Kataloge auflisten.</td>
+</tr>
+<tr>
+<td><code>catalog.schemas:read</code>
+</td>
+<td>Schemas auflisten.</td>
+</tr>
+<tr>
+<td><code>catalog.tables:read</code>
+</td>
+<td>Tabellen und Metadaten anzeigen.</td>
+</tr>
+<tr>
+<td><code>workspace.workspace</code>
+</td>
+<td>Persönliche Einstellungen und Skills im Workspace-Benutzerordner speichern.</td>
+</tr>
+</table>
+<div class="box"><b>Drei Voraussetzungen für eine Tabellenabfrage</b>
+<ol>
+<li>Die App hat die passenden Benutzer-Scopes.</li>
+<li>Du darfst Warehouse, Katalog, Schema und Tabelle verwenden.</li>
+<li>Du hast die Tabelle unter <b>Zahnrad → Datenquellen</b> ausgewählt und gespeichert.</li>
+</ol>
+<p>Eine ausgewählte Tabelle allein vergibt keine Rechte. Eine SQL-Abfrage läuft mit deinem weitergeleiteten Benutzer-Token.</p>
+</div>
+<details>
+<summary>Was wird wo gespeichert?</summary>
+<p>Jira-Token, temporäre Dateien und Bestätigungscodes liegen im Arbeitsspeicher. Deshalb genau einen Worker betreiben. Einstellungen und persönliche Skills liegen im Workspace-Benutzerordner. Team-Skills liegen im Repo. Die Speicherung des Chatverlaufs ist davon getrennt: Ohne optionale Datenbank arbeitet das Chat-Frontend ohne dauerhafte Verlaufsspeicherung.</p>
+</details>
+<details open>
+<summary>Fehler eingrenzen</summary>
+<table>
+<tr>
+<th>Symptom</th>
+<th>Prüfen</th>
+</tr>
+<tr>
+<td>„x-forwarded-email“ fehlt</td>
+<td>Identitätsweitergabe zwischen Chat-Frontend und Python-Backend; aktuelle Version bereitstellen. Keine Nutzerkennung in eine Chatnachricht schreiben.</td>
+</tr>
+<tr>
+<td>Jira-Verbindung scheitert</td>
+<td>Token korrekt kopiert, noch gültig und für diese Jira-Instanz erstellt? Nach Neustart erneut verbinden.</td>
+</tr>
+<tr>
+<td>Keine Tabellen sichtbar</td>
+<td>Benutzerautorisierung, Katalog-/Schemarechte und Tabellenrechte prüfen.</td>
+</tr>
+<tr>
+<td>SQL-Abfrage abgelehnt</td>
+<td>Warehouse-Zugriff, SELECT-Recht und Auswahl unter Datenquellen prüfen.</td>
+</tr>
+<tr>
+<td>„Database not available“</td>
+<td>Ohne optionale Chat-Datenbank wird der Verlauf nicht dauerhaft gespeichert. Weitere Fehlermeldungen separat prüfen.</td>
+</tr>
+<tr>
+<td>App startet nicht</td>
+<td>App → Logs: Ressourcen-Namen, Azure-Konfiguration und letzte Bereitstellung prüfen.</td>
+</tr>
+</table>
+</details>
+</section>
+<section class="part" id="nutzen" hidden>
+<p>Jira noch nicht verbunden? <a href="#jira-token">Zum Erstellen und Einfügen des Tokens</a>.</p>
 <h2 id="fragen">2. Was kann ich fragen?</h2>
 <table>
-  <tr><th>Thema</th><th>Beispiele</th></tr>
-  <tr><td>Tickets finden</td><td>„Zeig meine offenen Tickets.“ · „Welche Tickets zu Bremsen sind seit einer Woche unverändert?“</td></tr>
-  <tr><td>Ticket verstehen</td><td>„Fasse ABC-123 zusammen.“ · „Was fehlt in ABC-123 noch?“</td></tr>
-  <tr><td>Aktionen</td><td>„Weise ABC-123 an max.muster zu.“ · „Kommentiere ABC-123: Bitte Logs nachliefern.“ · „Setze das Label geprueft.“</td></tr>
-  <tr><td>Regeln anwenden</td><td>„Prüfe neue Tickets ohne Bearbeiter nach meinen Regeln.“</td></tr>
-  <tr><td>Daten (freigegebene Tabellen)</td><td>„Wie viele Fehler gab es pro Monat?“ · „Mach daraus ein Balkendiagramm.“</td></tr>
-  <tr><td>Exporte</td><td>„Exportiere meine offenen Tickets als Excel.“ · „Die Abfrage als CSV, bitte.“</td></tr>
+  <tr>
+<th>Thema</th>
+<th>Beispiele</th>
+</tr>
+  <tr>
+<td>Tickets finden</td>
+<td>„Zeig meine offenen Tickets.“ · „Welche Tickets zu Bremsen sind seit einer Woche unverändert?“</td>
+</tr>
+  <tr>
+<td>Ticket verstehen</td>
+<td>„Fasse ABC-123 zusammen.“ · „Was fehlt in ABC-123 noch?“</td>
+</tr>
+  <tr>
+<td>Aktionen</td>
+<td>„Weise ABC-123 an max.muster zu.“ · „Kommentiere ABC-123: Bitte Logs nachliefern.“ · „Setze das Label geprueft.“</td>
+</tr>
+  <tr>
+<td>Regeln anwenden</td>
+<td>„Prüfe neue Tickets ohne Bearbeiter nach meinen Regeln.“</td>
+</tr>
+  <tr>
+<td>Daten (freigegebene Tabellen)</td>
+<td>„Wie viele Fehler gab es pro Monat?“ · „Mach daraus ein Balkendiagramm.“</td>
+</tr>
+  <tr>
+<td>Exporte</td>
+<td>„Exportiere meine offenen Tickets als Excel.“ · „Die Abfrage als CSV, bitte.“</td>
+</tr>
 </table>
 
 <h2 id="dateien">3. Dateien anhängen</h2>
@@ -77,12 +878,13 @@
   Im Text erscheint <code>[Datei: name]</code> – dann einfach dazuschreiben, was der Agent damit tun soll.</p>
 <p class="hint">Lesbar: CSV, Excel, PDF (Text), TXT/MD/JSON. Max. 20 MB. Dateien liegen nur im Speicher und verschwinden nach 60 Minuten.</p>
 
-<h2 id="skills">4. Skills – gespeicherte Abläufe mit <code>/</code></h2>
+<h2 id="skills">4. Skills – gespeicherte Abläufe mit <code>/</code>
+</h2>
 <ul>
   <li><b>Aufrufen:</b> im Chat <code>/</code> tippen → Liste erscheint → auswählen, ggf. etwas dazuschreiben, z. B. <code>/wochenreport letzte Woche</code>.</li>
   <li><b>Team-Skills</b> (für alle): z. B. <code>/triage</code>, <code>/wochenreport</code>, <code>/ticket-zusammenfassung</code>.</li>
   <li><b>Eigene Skills:</b> Zahnrad → <b>Skills → + Neuer Skill</b>. Name, Kurzbeschreibung und die Anleitung in Schritten – so, als würden Sie es einer Kollegin erklären. Nur für Sie sichtbar, bleibt dauerhaft gespeichert.</li>
-  <li><b>Fürs Team freigeben:</b> beim Skill <b>„Für Team vorschlagen“</b> → Datei wird heruntergeladen → siehe <a href="#" data-goto="erweitern" data-anchor="team-skill">B · Skill fürs Team</a>.</li>
+  <li><b>Fürs Team freigeben:</b> beim Skill <b>„Für Team vorschlagen“</b> → Datei wird heruntergeladen → siehe <a href="#" data-goto="skills-guide" data-anchor="team-skill">Skill fürs Team</a>.</li>
 </ul>
 
 <h2 id="bestaetigen">5. Änderungen bestätigen</h2>
@@ -91,171 +893,55 @@
 
 <h2 id="zahnrad">6. Einstellungen (Zahnrad oben rechts)</h2>
 <table>
-  <tr><td><b>Zugänge</b></td><td>Name des Agenten, Jira-Token, optional eigener Azure-Key, Abmelden.</td></tr>
-  <tr><td><b>Modell</b></td><td>Team-Key (Standard) oder eigener Azure-OpenAI-Key.</td></tr>
-  <tr><td><b>Datenquellen</b></td><td>Tabellen freigeben, die der Agent lesen darf – nur mit Ihren eigenen Rechten, nur lesend.</td></tr>
-  <tr><td><b>Regeln</b></td><td>Ihre Regeln in einfacher Sprache, z. B. „Tickets zu Bremsen ohne Bearbeiter gehen an chassis.lead“.</td></tr>
-  <tr><td><b>Skills</b></td><td>Eigene Skills anlegen, bearbeiten, löschen, fürs Team vorschlagen.</td></tr>
+  <tr>
+<td><b>Zugänge</b>
+</td>
+<td>Name des Agenten, Jira-Token, optional eigener Azure-Key, Abmelden.</td>
+</tr>
+  <tr>
+<td><b>Modell</b>
+</td>
+<td>Team-Key (Standard) oder eigener Azure-OpenAI-Key.</td>
+</tr>
+  <tr>
+<td><b>Datenquellen</b>
+</td>
+<td>Tabellen freigeben, die der Agent lesen darf – nur mit Ihren eigenen Rechten, nur lesend.</td>
+</tr>
+  <tr>
+<td><b>Regeln</b>
+</td>
+<td>Ihre Regeln in einfacher Sprache, z. B. „Tickets zu Bremsen ohne Bearbeiter gehen an chassis.lead“.</td>
+</tr>
+  <tr>
+<td><b>Skills</b>
+</td>
+<td>Eigene Skills anlegen, bearbeiten, löschen, fürs Team vorschlagen.</td>
+</tr>
 </table>
 <p class="hint">Name, Modell, Datenquellen und Regeln mit <b>Speichern</b> übernehmen – sie liegen (ohne Keys) in Ihrem Home-Ordner und gelten ab der nächsten Nachricht.</p>
 </section>
-
-<!-- ======================================================= B · ERWEITERN -->
-<section class="part" id="erweitern">
-<nav class="toc"><a href="#mit-ki">Mit KI</a><a href="#team-skill">Skill fürs Team</a><a href="#tool">Tool von Hand</a>
-  <a href="#config">Einstellungen</a><a href="#sicherheit">Sicherheit</a></nav>
-
-<h2 id="mit-ki">1. Mit KI erweitern (empfohlen)</h2>
-<p>Repo in <b>VS Code</b> öffnen (mit GitHub Copilot oder Claude). Die KI kennt die Regeln dieses Projekts und erledigt alles selbst –
-  Code, Tests, Deploy. Einfach einen dieser Sätze kopieren und anpassen:</p>
-<div class="prompt"><pre>Richte das Projekt ein.</pre><button class="btn" data-copy>Kopieren</button></div>
-<div class="prompt"><pre>Baue ein Tool, das den Status eines Tickets ändert (z. B. auf „In Arbeit“).</pre><button class="btn" data-copy>Kopieren</button></div>
-<div class="prompt"><pre>Der Agent soll neue Tickets anlegen können – mit Projekt, Titel, Beschreibung und Komponente.</pre><button class="btn" data-copy>Kopieren</button></div>
-<div class="prompt"><pre>Starte die App lokal.</pre><button class="btn" data-copy>Kopieren</button></div>
-<div class="prompt"><pre>Deploye die App.</pre><button class="btn" data-copy>Kopieren</button></div>
-
-<h2 id="team-skill">2. Skill fürs Team fest im Code speichern</h2>
-<ol>
-  <li>Zahnrad → <b>Skills</b> → beim eigenen Skill <b>„Für Team vorschlagen“</b>. Die Datei <code>name.md</code> wird heruntergeladen.</li>
-  <li>Repo in VS Code öffnen, die Datei in den KI-Chat ziehen (anhängen) und schreiben:</li>
-</ol>
-<div class="prompt"><pre>Füge den angehängten Skill als Team-Skill ein, teste und deploye die App.</pre><button class="btn" data-copy>Kopieren</button></div>
-<p class="hint">Die KI legt die Datei in <code>skills/</code> ab, prüft Format und Tool-Namen und deployt. Danach sehen alle Nutzer den Skill bei <code>/</code>.
-  Ohne Vorlage geht auch: „Lege einen Team-Skill an, der …“.</p>
-
-<h2 id="tool">3. Tool von Hand bauen (für Interessierte)</h2>
-<p>Neue Datei in <code>jira_agent/tools/</code> – wird automatisch geladen. Vorlage: <code>example_custom_tool.py</code>.</p>
-<pre><code>from jira_agent.tools import ToolContext, tool
-
-
-@tool(write=True, needs=["jira"])          # ändert etwas → Bestätigung nötig; nur mit Jira-Token
-def jira_set_status(ctx: ToolContext, issue_key: str, status: str) -> dict:
-    """Ändert den Status eines Tickets, z. B. 'In Arbeit' oder 'Erledigt'.
-
-    issue_key: Ticket-Key, z. B. ABC-123
-    status: Name des Statuswechsels oder Zielstatus
-    """
-    ctx.jira.transition(issue_key, status)
-    return {"status": "OK"}</code></pre>
-<ul>
-  <li><b>Docstring</b> = Beschreibung für das Modell; Zeilen <code>name: Text</code> beschreiben die Parameter.</li>
-  <li><b><code>ctx.jira</code></b> hat fertige Helfer: <code>search</code>, <code>issue</code>, <code>create_issue</code>, <code>transition</code>, <code>assign</code>,
-    <code>comment</code>, <code>set_priority</code>, <code>add_label</code>, <code>link</code>, <code>add_worklog</code> …
-    Außerdem <code>ctx.sql</code> (lesendes SQL), <code>ctx.files</code> (Downloads), <code>ctx.uploads</code> (hochgeladene Dateien).</li>
-  <li><b><code>write=True</code></b> für alles, was etwas ändert – die Bestätigung ist dann erzwungen.</li>
-  <li><b>Testen ohne echtes Jira:</b> Vorlage <code>tests/test_example_custom_tool.py</code>, dann <code>uv run pytest tests -q</code>.</li>
-</ul>
-
-<h2 id="config">4. Zentrale Einstellungen</h2>
-<table>
-  <tr><td><code>jira_agent/config.yaml</code></td><td>Jira-URL, Azure-Modell, Zeilenlimits, Standardregeln, Ablaufzeiten.</td></tr>
-  <tr><td><code>databricks.yml</code> → <code>variables</code></td><td>App-Name, Secret (Azure-Key), SQL Warehouse.</td></tr>
-  <tr><td><code>skills/</code></td><td>Team-Skills (eine <code>.md</code>-Datei pro Skill).</td></tr>
-</table>
-
-<h2 id="sicherheit">5. Sicherheitsregeln</h2>
-<ul>
-  <li>Keine Keys oder Tokens in Code, Logs oder Tool-Ergebnissen.</li>
-  <li>Alles, was etwas ändert: <code>write=True</code>.</li>
-  <li>SQL nur über <code>ctx.sql</code> + <code>check_readonly_sql</code> (nur SELECT, nur freigegebene Tabellen, nur eingebaute Funktionen).</li>
-  <li>Eingaben prüfen, z. B. <code>JiraClient.check_key()</code>.</li>
-</ul>
-</section>
-
-<!-- ======================================================= C · EIGENE APP -->
-<section class="part" id="eigene-app">
-<p>So bekommen Sie eine eigene Kopie der App – ganz ohne Kommandozeile, direkt im Databricks-Workspace.</p>
-
-<h2>Teil 1: Code in den Workspace holen</h2>
-<ol class="steps">
-  <li>Links auf <b>Workspace</b> klicken.<img src="/jira/static/img/go_to_workspace.png" alt="Workspace öffnen" loading="lazy"></li>
-  <li><b>Workspace → Users →</b> Ihren Ordner (Ihre E-Mail) aufklappen.<img src="/jira/static/img/open_your_workspace.png" alt="Eigenen Ordner öffnen" loading="lazy"></li>
-  <li>Beim eigenen Ordner auf die <b>drei Punkte ⋮</b> (Alle Aktionen) klicken.<img src="/jira/static/img/click_three_dots.png" alt="Drei Punkte" loading="lazy"></li>
-  <li><b>Erstellen → Git-Ordner</b> wählen.<img src="/jira/static/img/create_git_folder.png" alt="Git-Ordner erstellen" loading="lazy"></li>
-  <li>Repository-URL eintragen und <b>Git-Ordner erstellen</b>:
-    <div class="prompt"><pre>https://github.com/CariadNayon/jira-agent-template.git</pre><button class="btn" data-copy>Kopieren</button></div>
-    <img src="/jira/static/img/add_this_url.png" alt="URL eintragen" loading="lazy"></li>
-</ol>
-
-<h2>Teil 2: App anlegen</h2>
-<ol class="steps" start="6" style="counter-reset:s 5">
-  <li>Oben rechts über das App-Menü <b>Databricks-Apps</b> öffnen.<img src="/jira/static/img/now_go_to_apps.png" alt="Zu den Apps" loading="lazy"></li>
-  <li><b>App erstellen</b> klicken.<img src="/jira/static/img/create_new_app.png" alt="App erstellen" loading="lazy"></li>
-  <li><b>Benutzerdefinierte App erstellen</b> wählen.<img src="/jira/static/img/choose_custom_app.png" alt="Benutzerdefinierte App" loading="lazy"></li>
-  <li>Namen vergeben (Kleinbuchstaben und Bindestriche, z. B. <code>agent-jira-team-x</code>) und <b>App erstellen</b>.
-    <img src="/jira/static/img/give_it_a_name.png" alt="Namen vergeben" loading="lazy"></li>
-</ol>
-
-<h2>Teil 3: Zugriffe einrichten (einmalig)</h2>
-<div class="box">
-  <p style="margin-top:0">In der App die <b>Ressourcen</b> mit genau diesen Namen hinzufügen:</p>
-  <table>
-    <tr><th>Name</th><th>Art</th><th>Berechtigung</th></tr>
-    <tr><td><code>secret</code></td><td>Secret: Scope <code>defmgtai-eu-we-dev-adb-local-secret-scope</code>, Key <code>gpt-4-api-key</code></td><td>Lesen</td></tr>
-    <tr><td><code>sql-warehouse</code></td><td>SQL Warehouse</td><td>Kann verwenden</td></tr>
-    <tr><td><code>experiment</code></td><td>MLflow-Experiment (für Protokolle)</td><td>Kann bearbeiten</td></tr>
-  </table>
-  <p>Unter <b>Autorisierung → Benutzerautorisierung</b> diese Bereiche (Scopes) hinzufügen:
-    <code>sql:restricted-query</code>, <code>catalog.catalogs:read</code>, <code>catalog.schemas:read</code>, <code>catalog.tables:read</code>, <code>workspace.workspace</code>.</p>
-  <p class="hint" style="margin-bottom:0">Damit liest der Agent Tabellen und speichert Einstellungen mit <i>Ihren</i> Rechten – nie mit denen der App.</p>
-</div>
-
-<h2>Teil 4: Bereitstellen</h2>
-<ol class="steps" start="10" style="counter-reset:s 9">
-  <li>In der App-Übersicht oben rechts <b>Anwenden</b> bzw. <b>Bereitstellen</b> klicken.<img src="/jira/static/img/click_apply.png" alt="Anwenden" loading="lazy"></li>
-  <li>Beim Quellcode-Pfad auf das <b>Ordner-Symbol</b> klicken.<img src="/jira/static/img/choose_source.png" alt="Quellcode wählen" loading="lazy"></li>
-  <li>Den Git-Ordner <b>jira-agent-template</b> wählen → <b>Auswählen</b> → <b>Anwenden</b>. Nach 1–2 Minuten ist die App unter ihrer URL erreichbar.
-    <img src="/jira/static/img/choose_template.png" alt="Ordner auswählen" loading="lazy"></li>
-</ol>
-
-<h2>Aktualisieren und Freigeben</h2>
-<ul>
-  <li><b>Neue Version:</b> Git-Ordner im Workspace öffnen → oben auf den Branch (<code>main</code>) → <b>Pull</b>. Danach in der App erneut <b>Bereitstellen</b>.
-    Seite mit <b>Strg+Shift+R</b> neu laden.</li>
-  <li><b>Wer darf die App nutzen?</b> In der App → <b>Teilen</b> bzw. <b>Berechtigungen</b>.</li>
-  <li><b>Logs bei Problemen:</b> In der App links <b>Logs</b>.</li>
-</ul>
-<div class="box warn"><b>Alternative für Entwickler:</b> <code>uv run deploy</code> (bzw. der KI sagen „Deploye die App.“) legt App, Ressourcen und Scopes automatisch an –
-  Werte stehen in <code>databricks.yml</code> unter <code>variables</code>.</div>
-<p class="hint">Die App läuft mit einer Instanz: Keys liegen nur im Arbeitsspeicher und gehen bei Neustart oder Deploy verloren.
-  MLflow-Protokolle enthalten Chat-Inhalte (keine Keys) – Zugriff auf das Experiment daher restriktiv vergeben.</p>
-</section>
-
 </main>
-<script>
-  (function () {
-    function show(part, anchor) {
-      document.querySelectorAll(".tabs button, .part").forEach(function (x) { x.classList.remove("active"); });
-      document.querySelector('.tabs button[data-part="' + part + '"]').classList.add("active");
-      document.getElementById(part).classList.add("active");
-      var el = anchor && document.getElementById(anchor);
-      if (el) el.scrollIntoView(); else window.scrollTo(0, 0);
-    }
-    document.querySelectorAll(".tabs button").forEach(function (b) {
-      b.addEventListener("click", function () { show(b.dataset.part); });
-    });
-    document.querySelectorAll("[data-goto]").forEach(function (a) {
-      a.addEventListener("click", function (e) { e.preventDefault(); show(a.dataset.goto, a.dataset.anchor); });
-    });
-    document.querySelectorAll("[data-copy]").forEach(function (b) {
-      b.addEventListener("click", function () {
-        var text = b.parentNode.querySelector("pre").textContent;
-        navigator.clipboard.writeText(text).then(function () {
-          b.textContent = "Kopiert ✓"; setTimeout(function () { b.textContent = "Kopieren"; }, 1500);
-        });
-      });
-    });
-    /* Direktlink auf einen Abschnitt, z. B. /jira/guide#jira-token */
-    var hash = location.hash.slice(1);
-    if (hash) {
-      var target = document.getElementById(hash);
-      var part = target && target.closest(".part");
-      if (part) show(part.id, hash);
-    }
-    document.getElementById("close").addEventListener("click", function () {
-      parent.postMessage("jira-settings-close", location.origin);
-    });
-  })();
-</script>
+</div>
+<dialog id="image-preview" aria-label="Screenshot vergrößert">
+<button class="btn" type="button">Schließen</button>
+<div class="preview-content">
+</div>
+</dialog>
+<div id="announcement" role="status" aria-live="polite">
+</div>
+<script>(function(){
+const chapters=[...document.querySelectorAll('.part')];
+function navigate(){const id=decodeURIComponent(location.hash.slice(1))||'bootstrap';const target=document.getElementById(id);const part=target&&(target.classList.contains('part')?target:target.closest('.part'));if(!part)return;chapters.forEach(x=>x.hidden=x!==part);document.querySelectorAll('[data-part]').forEach(a=>{if(a.dataset.part===part.id)a.setAttribute('aria-current','page');else a.removeAttribute('aria-current')});if(target!==part)target.scrollIntoView();else window.scrollTo(0,0)}
+window.addEventListener('hashchange',navigate);navigate();
+document.querySelectorAll('[data-goto]').forEach(a=>a.addEventListener('click',e=>{e.preventDefault();location.hash=a.dataset.anchor||a.dataset.goto}));
+const announcement=document.getElementById('announcement');let timer;function tell(text){announcement.textContent=text;clearTimeout(timer);timer=setTimeout(()=>announcement.textContent='',3000)}
+document.querySelectorAll('[data-copy]').forEach(b=>b.addEventListener('click',async()=>{try{await navigator.clipboard.writeText(b.parentElement.querySelector('pre').textContent);tell('Kopiert.')}catch(e){tell('Kopieren nicht möglich. Bitte den Text markieren und kopieren.')}}));
+const dialog=document.getElementById('image-preview');const content=dialog.querySelector('.preview-content');let returnFocus;
+document.querySelectorAll('.screenshot').forEach(b=>b.addEventListener('click',()=>{returnFocus=b;content.replaceChildren();const fig=b.closest('figure').cloneNode(true);const button=fig.querySelector('button');const div=document.createElement('div');div.className='screenshot';div.append(...button.childNodes);button.replaceWith(div);fig.querySelector('img').loading='eager';// Give cloned marker IDs unique names.
+fig.querySelectorAll('marker').forEach(m=>{const id=m.id;m.id=id+'-preview';fig.querySelector('g').style.markerEnd='url(#'+m.id+')'});content.append(fig);dialog.showModal()}));
+dialog.querySelector('button').addEventListener('click',()=>dialog.close());dialog.addEventListener('click',e=>{if(e.target===dialog)dialog.close()});dialog.addEventListener('close',()=>{content.replaceChildren();if(returnFocus)returnFocus.focus()});
+document.getElementById('close').addEventListener('click',()=>{if(window.parent!==window)parent.postMessage('jira-settings-close',location.origin);else window.close()});
+})();</script>
 </body>
 </html>
