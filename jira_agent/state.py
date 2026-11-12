@@ -11,6 +11,7 @@ import time
 from dataclasses import dataclass, field
 
 from jira_agent import CFG
+from jira_agent.approvals import ActionLedger
 
 _CRED_TTL = float(CFG["session"]["credentials_ttl_hours"]) * 3600
 _FILE_TTL = float(CFG["session"]["files_ttl_minutes"]) * 60
@@ -32,6 +33,7 @@ class UserState:
     jira_user: str | None = None
     jira_display_name: str | None = None              # z. B. "Lenz, Nayon" – für den Standardnamen
     settings: dict | None = None
+    actions: ActionLedger = field(default_factory=ActionLedger)
     secret: bytes = field(default_factory=lambda: secrets.token_bytes(32))
     created: float = field(default_factory=time.time)
     files: dict = field(default_factory=dict)          # vom Agenten erzeugte Dateien (Diagramme, Exporte)

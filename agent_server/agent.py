@@ -33,7 +33,7 @@ async def invoke_handler(request: ResponsesAgentRequest) -> ResponsesAgentRespon
     if session_id := get_session_id(request):
         mlflow.update_current_trace(metadata={"mlflow.trace.session": session_id})
     messages = normalize_history_items([i.model_dump() for i in request.input])
-    agent, run_ctx = await asyncio.to_thread(prepare, get_request_headers(), messages)
+    agent, run_ctx = await asyncio.to_thread(prepare, get_request_headers(), messages, get_session_id(request) or "")
     result = await Runner.run(agent, messages, context=run_ctx, max_turns=CFG["agent"]["max_turns"])
     return ResponsesAgentResponse(output=[item.to_input_item() for item in result.new_items])
 
@@ -45,7 +45,7 @@ async def stream_handler(
     if session_id := get_session_id(request):
         mlflow.update_current_trace(metadata={"mlflow.trace.session": session_id})
     messages = normalize_history_items([i.model_dump() for i in request.input])
-    agent, run_ctx = await asyncio.to_thread(prepare, get_request_headers(), messages)
+    agent, run_ctx = await asyncio.to_thread(prepare, get_request_headers(), messages, get_session_id(request) or "")
     result = Runner.run_streamed(agent, input=messages, context=run_ctx, max_turns=CFG["agent"]["max_turns"])
     async for event in process_agent_stream_events(result.stream_events()):
         yield event

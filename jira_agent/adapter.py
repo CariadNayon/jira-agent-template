@@ -3,8 +3,8 @@
 Schreib-Tools (write=True) laufen nur, wenn
   1. das Modell den richtigen confirmation_code mitschickt UND
   2. genau dieser Code in der letzten Nachricht des Nutzers steht ("ja <CODE>").
-Der Code ist ein HMAC über Tool-Name + Argumente mit einem Geheimnis pro Nutzer-Sitzung –
-das Modell kann ihn nicht selbst berechnen, und er gilt nur für genau diese Aktion.
+Der Code gehört zu einem zufälligen, einmaligen Vorschlag. Er ist an Sitzung, Gespräch, Tool und
+Argumente gebunden. Ein Aktionsbeleg verhindert doppelte Ausführung während derselben Sitzung.
 """
 from __future__ import annotations
 
@@ -15,6 +15,7 @@ import hmac
 import json
 import re
 
+from jira_agent.approvals import ActionLedger
 from jira_agent.tools import REGISTRY, Tool, ToolContext, json_schema, load_tools
 
 _MAX_OUTPUT = 20000
@@ -23,19 +24,22 @@ _MAX_OUTPUT = 20000
 class RunContext:
     """Kontext für Runner.run(context=...). Bewusst ohne aussagekräftiges repr (Traces)."""
 
-    __slots__ = ("tool_ctx", "_secret", "last_user_text")
+    __slots__ = ("tool_ctx", "_secret", "last_user_text", "actions", "conversation_id")
 
-    def __init__(self, tool_ctx: ToolContext, secret: bytes, last_user_text: str):
+    def __init__(self, tool_ctx: ToolContext, secret: bytes, last_user_text: str, *,
+                 actions: ActionLedger | None = None, conversation_id: str = ""):
         self.tool_ctx = tool_ctx
         self._secret = secret
         self.last_user_text = last_user_text or ""
+        self.actions = actions if actions is not None else ActionLedger()
+        self.conversation_id = conversation_id
 
     def __repr__(self) -> str:
         return "RunContext()"
 
-    def code_for(self, name: str, args: dict) -> str:
-        payload = f"{name}|{json.dumps(args, sort_keys=True, ensure_ascii=False)}".encode()
-        return hmac.new(self._secret, payload, hashlib.sha256).hexdigest()[:6].upper()
+    def fingerprint(self, name: str, args: dict) -> str:
+        payload = json.dumps([self.conversation_id, name, args], sort_keys=True, ensure_ascii=False).encode()
+        return hmac.new(self._secret, payload, hashlib.sha256).hexdigest()
 
 
 def available_tools(tool_ctx: ToolContext) -> list[Tool]:
@@ -52,17 +56,42 @@ def available_tools(tool_ctx: ToolContext) -> list[Tool]:
 
 
 def execute(t: Tool, rc: RunContext, args: dict) -> dict:
-    """Führt ein Tool aus (synchron, testbar). Fehler gehen als Text an das Modell zurück."""
+    """Execute writes once per explicit approval, including across retries/concurrent requests."""
+    claimed_code = None
     try:
+        args = dict(args)  # do not mutate callers' arguments when removing the confirmation
         if t.write:
             given = str(args.pop("confirmation_code", "") or "").upper()
-            code = rc.code_for(t.name, args)
-            if given != code or not re.fullmatch(r"\s*ja\s+" + re.escape(code) + r"\s*[.!]?\s*", rc.last_user_text, re.I):
+            fingerprint = rc.fingerprint(t.name, args)
+            approval = re.fullmatch(r"\s*ja\s+([A-F0-9]{6})\s*[.!]?\s*", rc.last_user_text, re.I)
+            if approval and given == approval.group(1).upper():
+                claimed, receipt = rc.actions.claim(given, fingerprint)
+                if receipt is not None:
+                    return receipt
+                if claimed:
+                    claimed_code = given
+            if claimed_code is None:
+                code, receipt = rc.actions.propose(fingerprint, rc._secret, confirmation_message=bool(approval))
+                if receipt is not None:
+                    return receipt
                 return {"status": "BESTAETIGUNG_NOETIG", "tool": t.name, "argumente": args, "code": code,
-                        "hinweis": f"Zeige dem Nutzer genau diese Aktion und bitte um die Antwort 'ja {code}'."}
-        return t.func(rc.tool_ctx, **args)
+                        "expires_in_seconds": 600,
+                        "hinweis": f"Zeige dem Nutzer genau diese Aktion und bitte um die Antwort 'ja {code}'. "
+                                   "Die Bestätigung ist einmalig und 10 Minuten gültig."}
+        result = t.func(rc.tool_ctx, **args)
+        if claimed_code is not None:
+            if "error" in result:
+                result = {**result, "outcome": "unverified", "hinweis": "Vor einer Wiederholung im Zielsystem prüfen."}
+            rc.actions.finish(claimed_code, result, uncertain="error" in result)
+        return result
     except Exception as e:
-        return {"error": type(e).__name__, "details": str(e)[:300]}
+        result = {"error": type(e).__name__, "details": str(e)[:300]}
+        if claimed_code is not None:
+            # A timeout/error does not prove that the external write failed. Keep the claim consumed.
+            result.update({"outcome": "unverified", "hinweis": "Nicht automatisch erneut ausführen. "
+                           "Zuerst im Zielsystem prüfen, ob die Änderung übernommen wurde."})
+            rc.actions.finish(claimed_code, result, uncertain=True)
+        return result
 
 
 async def _on_invoke(t: Tool, ctx, arguments: str) -> str:

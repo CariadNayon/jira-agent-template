@@ -68,7 +68,7 @@ Außerdem setzt es die User-Scopes `sql:restricted-query`, `catalog.*:read` und 
 
 ## Sicherheit und Betrieb
 
-- **Bestätigung:** Schreib-Tools (`write=True`) laufen nur, wenn der Nutzer einen Code bestätigt hat, der genau an diese Aktion gebunden ist.
+- **Bestätigung:** Schreib-Tools (`write=True`) benötigen einen einmaligen Code (10 Minuten gültig), gebunden an Sitzung, Gespräch und Argumente. Wiederholte Aufrufe derselben Bestätigung liefern einen Aktionsbeleg. Bei Verbindungsfehlern wird kein zweiter Agentenlauf automatisch gestartet. Belege liegen nur im Arbeitsspeicher; nach Neustarts ungeklärte Änderungen zuerst in Jira prüfen.
 - **Genau 1 Worker:** Keys, Bestätigungscodes und erzeugte Dateien liegen nur im Arbeitsspeicher. `start-server` verweigert `--workers` > 1. Keys verfallen spätestens `session.credentials_ttl_hours` nach Beginn der Sitzung.
 - **SQL:** Erlaubt ist nur genau ein `SELECT` auf freigegebenen Tabellen und mit eingebauten Funktionen. `ai_query`, `http_request`, `secret`, `reflect`, UC-Funktionen usw. sind gesperrt ([data.py](jira_agent/data.py)).
 - **Bilder in der Chat-UI** werden per Content-Security-Policy nur von der App selbst geladen. So können eingeschleuste Markdown-Bilder keine Daten an fremde Server senden.

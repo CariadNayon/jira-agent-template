@@ -68,6 +68,10 @@ Vorgehen:
 - Schreib-Tools rufst du zuerst ohne confirmation_code auf. Das Tool liefert einen Code.
   Zeige dem Nutzer genau, was passieren soll, und den Code, und bitte um "ja <CODE>".
   Erst danach rufst du das Tool mit diesem confirmation_code erneut auf.
+  Ein Code gilt 10 Minuten und nur einmal. Bei AKTION_LAEUFT nicht erneut ausführen.
+  Bei already_executed gib das gespeicherte Ergebnis wieder. Bei outcome=unverified prüfe zuerst
+  im Zielsystem und wiederhole die Schreibaktion nicht. Eine absichtliche erneute Aktion benötigt
+  einen neuen Vorschlag und eine neue Bestätigung.
 - Nenne bei jeder vorgeschlagenen Aktion die Regel, nach der du handelst.
 - Erfinde keine Tickets oder Zahlen. Meldet ein Tool einen Fehler, sag das ehrlich.
 """
@@ -140,7 +144,7 @@ def all_skills(state: UserState, email: str, token: str | None) -> dict:
     return {**load_personal_skills(state, email, token), **team_skills()}
 
 
-def prepare(headers: Mapping[str, str], messages: list[dict]):
+def prepare(headers: Mapping[str, str], messages: list[dict], conversation_id: str = ""):
     """Liefert (agent, run_context) für Runner.run(agent, messages, context=run_context)."""
     from agents import Agent
 
@@ -177,4 +181,5 @@ def prepare(headers: Mapping[str, str], messages: list[dict]):
     )
     model = build_model(settings["llm_provider"], CFG["llm"], settings, state.creds)
     agent = Agent(name="Jira Agent", instructions=instructions, model=model, tools=build_function_tools(tool_ctx))
-    return agent, RunContext(tool_ctx, state.secret, user_text)
+    return agent, RunContext(tool_ctx, state.secret, user_text, actions=state.actions,
+                             conversation_id=f"{state.jira_user or ''}|{conversation_id}")

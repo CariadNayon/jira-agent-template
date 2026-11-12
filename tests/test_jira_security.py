@@ -49,7 +49,7 @@ def test_write_tool_requires_code_from_user_message():
     # Modell schickt den Code, der Nutzer hat ihn aber nicht bestätigt.
     assert execute(t, rc, {"issue_key": "ABC-1", "confirmation_code": code})["status"] == "BESTAETIGUNG_NOETIG"
     # Bestätigter Code gilt nicht für andere Argumente.
-    rc_ok = RunContext(ToolContext(), b"secret", f"ja {code.lower()}")
+    rc_ok = RunContext(ToolContext(), b"secret", f"ja {code.lower()}", actions=rc.actions)
     assert execute(t, rc_ok, {"issue_key": "ABC-2", "confirmation_code": code})["status"] == "BESTAETIGUNG_NOETIG"
     assert not calls
 
