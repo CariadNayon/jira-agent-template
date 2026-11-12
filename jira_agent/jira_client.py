@@ -124,9 +124,12 @@ class JiraClient:
             raise JiraError(f"Jira-Fehler (HTTP {r.status_code}): {r.text[:300]}")
         return r.json() if r.content else {}
 
-    def search(self, jql: str, max_results: int = 20, fields: str = "summary,status,priority,assignee,updated") -> dict:
+    def search(self, jql: str, max_results: int = 20, fields: str = "summary,status,priority,assignee,updated",
+               start_at: int = 0) -> dict:
         """Tickets per JQL. Liefert {"total": n, "issues": [...]} (Rohdaten von Jira)."""
-        return self._call("GET", "/search", params={"jql": jql, "maxResults": max(1, min(int(max_results), 100)),
+        if start_at < 0:
+            raise ValueError("start_at darf nicht negativ sein.")
+        return self._call("GET", "/search", params={"jql": jql, "startAt": int(start_at), "maxResults": max(1, min(int(max_results), 100)),
                                                      "fields": fields})
 
     def issue(self, issue_key: str, fields: str = "*navigable") -> dict:

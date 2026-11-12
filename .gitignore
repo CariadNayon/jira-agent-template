@@ -213,3 +213,7 @@ load-test-runs/
 # Kein Lockfile: Databricks Apps setzt beim Build ein eigenes exclude-newer-Datum, mit dem ein
 # eingechecktes uv.lock nie zu 'uv sync --locked' passt. Abhängigkeiten stehen in pyproject.toml.
 uv.lock
+
+# Downloaded and locally patched chat frontend / acceptance artifacts
+/e2e-chatbot-app-next/
+/work/

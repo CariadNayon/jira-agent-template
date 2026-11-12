@@ -15,7 +15,7 @@ from typing import Literal
 from jira_agent import CFG
 from jira_agent.data import check_readonly_sql
 from jira_agent.tools import ToolContext, tool
-from jira_agent.tools.jira_tools import EXPORT_MAX_RESULTS, search_issues
+from jira_agent.tools.jira_tools import export_issues
 
 _EXPORT_ROWS = int(CFG["data"]["export_row_limit"])
 _MAX_POINTS = 50
@@ -107,16 +107,19 @@ def chart_from_result(files, res: dict, chart_type: str, x: str, y: str, title: 
 
 @tool(needs=["files"])
 def export_file(ctx: ToolContext, source: Literal["sql", "jql"], query: str, format: Literal["csv", "xlsx"],
-                filename: str = "") -> dict:
+                filename: str = "", start_at: int = 0) -> dict:
     """Exportiert Daten als Datei (CSV oder Excel) zum Download. source='sql': ein lesendes SELECT
-    auf freigegebenen Tabellen; source='jql': Jira-Tickets per JQL (max. 100).
+    auf freigegebenen Tabellen; source='jql': Jira-Tickets über alle Ergebnisseiten, bis zum konfigurierten Export-Limit.
 
     source: Datenquelle
     query: SELECT bzw. JQL
     format: Dateiformat
     filename: Dateiname ohne Endung
+    start_at: nur für JQL: Ergebnisposition ab 0; für weitere Dateien next_start_at verwenden
     """
     if source == "sql":
+        if start_at:
+            raise ValueError("start_at ist nur für JQL-Exporte vorgesehen.")
         res = _sql_result(ctx, query)
         if "error" in res:
             return res
@@ -124,14 +127,17 @@ def export_file(ctx: ToolContext, source: Literal["sql", "jql"], query: str, for
     elif source == "jql":
         if ctx.jira is None:
             raise RuntimeError("Kein Jira-Token – bitte über das Zahnrad verbinden.")
-        res = search_issues(ctx.jira, query, EXPORT_MAX_RESULTS)
+        res = export_issues(ctx.jira, query, _EXPORT_ROWS, start_at)
         columns = ["key", "summary", "status", "priority", "components", "assignee", "updated"]
         rows = [[", ".join(i[c]) if isinstance(i.get(c), list) else i.get(c) for c in columns]
                 for i in res["issues"]]
     else:
         raise ValueError("source muss sql oder jql sein.")
 
-    return export_result(ctx.files,columns,rows,format,filename or f"export_{source}")
+    result=export_result(ctx.files,columns,rows,format,filename or f"export_{source}")
+    return {**result, "truncated":bool(res.get("truncated")),
+            **({k:res.get(k) for k in ("total","start_at","next_start_at","warning","query","snapshot")}
+               if source=="jql" else {})}
 
 
 def export_result(files, columns: list, rows: list, format: str, filename: str) -> dict:

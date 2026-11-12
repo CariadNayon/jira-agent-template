@@ -118,10 +118,15 @@ Der Team-Skill `/datei-auswertung` verbindet diese Fähigkeiten zu einem wiederv
 
 ## Prüfen und bereitstellen
 
+Jira-Suchen liefern `truncated` und `next_start_at`, wenn weitere Treffer vorhanden sind. JQL-Exporte lesen alle Seiten bis `data.export_row_limit` (standardmäßig 5.000 Tickets pro Datei), auch wenn Jira kleinere Seiten zurückgibt. Ohne eigene Sortierung wird `ORDER BY key ASC` ergänzt. Nach etwa 60 Sekunden wird vor der nächsten Seite abgebrochen; ein bereits laufender HTTP-Aufruf kann länger dauern. Begrenzte oder widersprüchliche Ergebnisse erhalten eine Warnung. Mit `next_start_at` lässt sich eine weitere Datei erzeugen. Jira stellt keinen konsistenten Snapshot bereit (`snapshot: false`); Änderungen während eines Exports können trotz stabiler Gesamtzahl Ergebnisse verschieben.
+
+Beim ersten Start lädt die App die getestete Databricks-Frontend-Version aus `scripts/frontend_source.py`. Laufzeit und CI verwenden dieselben Anpassungen für Identität, Uploads, Wiederholungen und Tool-Status. `npm ci` installiert die Versionen aus dem zugehörigen Upstream-Lockfile. Ein vorhandener Ordner `e2e-chatbot-app-next` bleibt erhalten; bei eigenen Änderungen müssen die Anpassungen und der Build erneut geprüft werden. Beim Aktualisieren der Upstream-Version zuerst die Build-Prüfung ausführen. Tool-Ergebnisse mit Fehlern werden als Fehler angezeigt, ausstehende Bestätigungen als solche.
+
 ```bash
 uv run pytest tests -q
+uv run agent-evaluate
 uv run deploy --check
 uv run deploy
 ```
 
-Die Tests laufen ohne Jira, Databricks und Modellzugriff. Sie prüfen die Tool-Ausführung, ersetzen aber keinen Modell- und Integrationstest im Ziel-Workspace. Nach dem Deployment Jira erneut verbinden. Dann zuerst eine lesende Anfrage und anschließend ein Testticket in einem dafür vorgesehenen Projekt mit ausdrücklicher Bestätigung ausprobieren.
+Die Tests laufen ohne Jira, Databricks und Modellzugriff. Die GitHub-Prüfungen laufen bei Änderungen an `main` und vor dem manuellen CI-Deploy. Sie ersetzen keine Abnahme im Ziel-Workspace. Optionale echte Modelltests mit simuliertem Jira und die Browser-Abnahme stehen in [ACCEPTANCE.md](ACCEPTANCE.md). Nach dem Deployment Jira erneut verbinden. Dann zuerst eine lesende Anfrage und anschließend ein Testticket in einem dafür vorgesehenen Projekt mit ausdrücklicher Bestätigung ausprobieren.

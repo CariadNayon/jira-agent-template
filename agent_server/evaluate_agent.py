@@ -1,100 +1,65 @@
+"""Realistic acceptance: offline by default; opt-in real model calls with fake Jira/files."""
+from __future__ import annotations
+
+import argparse
 import asyncio
-import logging
+import json
+from pathlib import Path
+import subprocess
+import sys
 
-import mlflow
-from dotenv import load_dotenv
-from mlflow.genai.agent_server import get_invoke_function
-from mlflow.genai.scorers import (
-    Completeness,
-    ConversationalSafety,
-    ConversationCompleteness,
-    Fluency,
-    KnowledgeRetention,
-    RelevanceToQuery,
-    Safety,
-    ToolCallCorrectness,
-    UserFrustration,
-)
-from mlflow.genai.simulators import ConversationSimulator
-from mlflow.types.responses import ResponsesAgentRequest
-
-# Load environment variables from .env if it exists
-load_dotenv(dotenv_path=".env", override=True)
-logging.getLogger("mlflow.utils.autologging_utils").setLevel(logging.ERROR)
-
-# need to import agent for our @invoke-registered function to be found
-from agent_server import agent  # noqa: F401
-
-# Create your evaluation dataset
-# Refer to documentation for evaluations:
-# Scorers: https://docs.databricks.com/aws/en/mlflow3/genai/eval-monitor/concepts/scorers
-# Predefined LLM scorers: https://mlflow.org/docs/latest/genai/eval-monitor/scorers/llm-judge/predefined
-# Defining custom scorers: https://docs.databricks.com/aws/en/mlflow3/genai/eval-monitor/custom-scorers
-test_cases = [
-    {
-        "goal": "Learn about the main dishes of Vietnamese cuisine",
-        "persona": "An impatient foodie who doesn't know much about Vietnamese cuisine.",
-        "simulation_guidelines": [
-            "Initially explore the main influences of Vietnamese cuisine before the main dishes.",
-        ],
-    },
-    {
-        "goal": "Figure out which prime numbers between 1 and 50 are also Fibonacci numbers",
-        "persona": "You are a math novice who has heard of prime numbers but doesn't know what Fibonacci numbers are.",
-        "simulation_guidelines": [
-            "Initially ask questions to understand the Fibonacci sequence before exploring which ones are prime.",
-            "Prefer short messages",
-        ],
-    },
-]
-
-simulator = ConversationSimulator(
-    test_cases=test_cases,
-    max_turns=5,
-    user_model="databricks:/databricks-claude-sonnet-4-5",
-)
-
-# Get the invoke function that was registered via @invoke decorator in your agent
-invoke_fn = get_invoke_function()
-assert invoke_fn is not None, (
-    "No function registered with the `@invoke` decorator found."
-    "Ensure you have a function decorated with `@invoke()`."
-)
-
-# if invoke function is async, wrap it in a sync function.
-# The simulator may already be running an event loop, so we use nest_asyncio
-# to allow nested run_until_complete() calls without deadlocking.
-if asyncio.iscoroutinefunction(invoke_fn):
-    import nest_asyncio
-
-    nest_asyncio.apply()
-
-    def predict_fn(input: list[dict], **kwargs) -> dict:
-        req = ResponsesAgentRequest(input=input)
-        loop = asyncio.get_event_loop()
-        response = loop.run_until_complete(invoke_fn(req))
-        return response.model_dump()
-else:
-
-    def predict_fn(input: list[dict], **kwargs) -> dict:
-        req = ResponsesAgentRequest(input=input)
-        response = invoke_fn(req)
-        return response.model_dump()
+ROOT=Path(__file__).resolve().parent.parent
 
 
 def evaluate():
-    mlflow.genai.evaluate(
-        data=simulator,
-        predict_fn=predict_fn,
-        scorers=[
-            Completeness(),
-            ConversationCompleteness(),
-            ConversationalSafety(),
-            KnowledgeRetention(),
-            UserFrustration(),
-            Fluency(),
-            RelevanceToQuery(),
-            Safety(),
-            ToolCallCorrectness(),
-        ],
-    )
+    from agent_server.evaluation import CASES
+    parser=argparse.ArgumentParser(description='Jira-/Datei-Abnahme. Standard: offline ohne echte Dienste.')
+    parser.add_argument('--list',action='store_true',help='Optionale Modell-Abnahmefälle anzeigen')
+    parser.add_argument('--live',action='store_true',help='Echtes konfiguriertes Azure-Modell verwenden; Jira bleibt simuliert')
+    parser.add_argument('--case',action='append',choices=sorted(CASES),dest='cases')
+    parser.add_argument('--json-report',type=Path,help='Strukturierten Bericht speichern')
+    args=parser.parse_args()
+    if args.list:
+        for name,description in CASES.items():print(f'{name}: {description}')
+        return
+    if not args.live:
+        if args.cases:parser.error('--case ist für den optionalen --live-Modelltest vorgesehen.')
+        command=[sys.executable,'-m','pytest',str(ROOT/'tests/acceptance'),'-q']
+        result=subprocess.run(command,cwd=ROOT)
+        if args.json_report:
+            args.json_report.parent.mkdir(parents=True,exist_ok=True)
+            args.json_report.write_text(json.dumps({'mode':'offline-simulated','passed':result.returncode==0,
+                                                     'note':'Keine Bewertung eines echten Modells.'},indent=2))
+        raise SystemExit(result.returncode)
+    async def live():
+        from dotenv import load_dotenv
+        from jira_agent import CFG
+        from jira_agent.llm import build_model
+        from jira_agent.runtime import DEFAULT_SETTINGS
+        from agent_server.evaluation import run_case
+        load_dotenv(ROOT/'.env')
+        print('Echtes Modell: Dieser Lauf verursacht Modellaufrufe. Jira und Dateien sind synthetische Testdaten.')
+        try:
+            model=await asyncio.wait_for(asyncio.to_thread(build_model,CFG['llm']['provider'],
+                                         CFG['llm'],dict(DEFAULT_SETTINGS),{}),timeout=30)
+        except Exception as exc:
+            report={'mode':'live-model-fake-services','passed':False,'blocked':True,
+                    'reason':f'Modell-Konfiguration nicht verfügbar ({type(exc).__name__}). Azure-Key/Databricks-Anmeldung prüfen.'}
+            return report,2
+        try:
+            results=[await run_case(name,model) for name in (args.cases or list(CASES))]
+        finally:
+            client=getattr(model,'_client',None)
+            if client is not None:await client.close()
+        passed=all(r['passed'] for r in results)
+        return {'mode':'live-model-fake-services','passed':passed,'cases':results,
+                'note':'Keine Abnahme echter Jira-/SQL-Rechte oder der Browser-Anmeldung.'},0 if passed else 1
+    report,status=asyncio.run(live())
+    print(json.dumps(report,ensure_ascii=False,indent=2))
+    if args.json_report:
+        args.json_report.parent.mkdir(parents=True,exist_ok=True)
+        args.json_report.write_text(json.dumps(report,ensure_ascii=False,indent=2),encoding='utf-8')
+    raise SystemExit(status)
+
+
+if __name__=='__main__':evaluate()

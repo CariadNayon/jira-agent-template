@@ -86,7 +86,9 @@ class FakeJira(JiraClient):
             return FakeResponse(200, self.users[0])
         if path == "/search":
             found = [self._jira_issue(k) for k in self.issues]
-            return FakeResponse(200, {"total": len(found), "issues": found[: kwargs["params"]["maxResults"]]})
+            start=kwargs["params"].get("startAt",0)
+            return FakeResponse(200, {"total":len(found),"startAt":start,
+                                      "issues":found[start:start+kwargs["params"]["maxResults"]]})
         if path == "/user/search":
             return FakeResponse(200, self.users)
         if path == "/project":

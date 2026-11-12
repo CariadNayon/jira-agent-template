@@ -55,6 +55,8 @@ Voraussetzungen: [uv](https://docs.astral.sh/uv/getting-started/installation/) �
 |---|---|
 | Einrichten (einmalig) | `uv run quickstart --profile <profil> --skip-lakebase` |
 | Tests (ohne Jira oder Databricks) | `uv run pytest tests -q` |
+| Jira-/Datei-Abnahme (offline) | `uv run agent-evaluate` |
+| Optionale Modelltests anzeigen | `uv run agent-evaluate --list` |
 | Lokal starten | `uv run start-app`, danach http://localhost:8000 |
 | Deploy prüfen | `uv run deploy --check` |
 | Deployen | `uv run deploy` |
@@ -66,7 +68,9 @@ Voraussetzungen: [uv](https://docs.astral.sh/uv/getting-started/installation/) �
 - `secret`, wird zur Umgebungsvariable `AZURE_OPENAI_KEY`
 - `sql-warehouse`, wird zur Umgebungsvariable `WAREHOUSE_ID`
 
-Außerdem setzt es die User-Scopes `sql:restricted-query`, `catalog.*:read` und `workspace.workspace`. Die Werte kommen aus `variables` in `databricks.yml` und lassen sich einmalig überschreiben: `uv run deploy --var app_name=agent-test`. Ohne Skript geht auch `databricks bundle deploy` und danach `databricks bundle run agent_openai_agents_sdk`. Ist bei einer im UI angelegten App keine Ressource gesetzt, nutzt die App die Standardwerte aus `databricks.yml`. Für CI gibt es die GitHub Action [.github/workflows/deploy.yml](.github/workflows/deploy.yml), sie führt `uv run deploy --target prod` aus.
+Außerdem setzt es die User-Scopes `sql:restricted-query`, `catalog.*:read` und `workspace.workspace`. Die Werte kommen aus `variables` in `databricks.yml` und lassen sich einmalig überschreiben: `uv run deploy --var app_name=agent-test`. Ohne Skript geht auch `databricks bundle deploy` und danach `databricks bundle run agent_openai_agents_sdk`. Ist bei einer im UI angelegten App keine Ressource gesetzt, nutzt die App die Standardwerte aus `databricks.yml`.
+
+Die GitHub Action [checks.yml](.github/workflows/checks.yml) prüft Änderungen auf `main` automatisch: Python 3.11/3.12, Offline-Abnahme und der vollständige Build des angepassten Chat-Frontends. Die manuell gestartete [Deploy-Action](.github/workflows/deploy.yml) führt diese Prüfungen vor `uv run deploy --target prod` aus. Reale Modell-, Anmelde- und Berechtigungstests sind separat beschrieben: [Abnahme](docs/ACCEPTANCE.md).
 
 ## Sicherheit und Betrieb
 

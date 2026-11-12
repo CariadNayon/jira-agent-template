@@ -34,8 +34,11 @@ permissions:
   contents: read
 
 jobs:
+  checks:
+    uses: ./.github/workflows/checks.yml
   deploy:
     name: Deploy
+    needs: checks
     runs-on: ubuntu-latest
     environment: prod
     env:
@@ -53,6 +56,6 @@ jobs:
       - name: Install uv
         uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
 
-      # Liest App-Name, Secret und Warehouse aus jira_agent/config.yaml, prüft, lädt hoch und startet neu.
+      # Liest App-Name, Secret und Warehouse aus databricks.yml, prüft, lädt hoch und startet neu.
       - name: Deploy
         run: uv run deploy --target prod

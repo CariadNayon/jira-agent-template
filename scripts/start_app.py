@@ -22,6 +22,7 @@ import shutil
 import socket
 import subprocess
 import sys
+import tempfile
 import threading
 from pathlib import Path
 
@@ -147,35 +148,22 @@ class ProcessManager:
     def clone_frontend_if_needed(self):
         if Path("e2e-chatbot-app-next").exists():
             return True
-
-        print("Cloning e2e-chatbot-app-next...")
-        for url in [
-            "https://github.com/databricks/app-templates.git",
-            "git@github.com:databricks/app-templates.git",
-        ]:
+        from scripts.frontend_source import FRONTEND_REVISION
+        print(f"Cloning tested frontend {FRONTEND_REVISION[:12]}...")
+        with tempfile.TemporaryDirectory(prefix="frontend-source-",dir=".") as temporary:
+            checkout=Path(temporary)/"app-templates"
             try:
-                subprocess.run(
-                    ["git", "clone", "--filter=blob:none", "--sparse", url, "temp-app-templates"],
-                    check=True,
-                    capture_output=True,
-                )
-                break
+                subprocess.run(["git","clone","--filter=blob:none","--sparse",
+                                "https://github.com/databricks/app-templates.git",str(checkout)],
+                               check=True,capture_output=True)
+                subprocess.run(["git","checkout","--detach",FRONTEND_REVISION],cwd=checkout,
+                               check=True,capture_output=True)
+                subprocess.run(["git","sparse-checkout","set","e2e-chatbot-app-next"],cwd=checkout,
+                               check=True,capture_output=True)
+                (checkout/"e2e-chatbot-app-next").rename("e2e-chatbot-app-next")
             except subprocess.CalledProcessError:
-                continue
-        else:
-            print("ERROR: Failed to clone repository.")
-            print(
-                "Manually download from: https://download-directory.github.io/?url=https://github.com/databricks/app-templates/tree/main/e2e-chatbot-app-next"
-            )
-            return False
-
-        subprocess.run(
-            ["git", "sparse-checkout", "set", "e2e-chatbot-app-next"],
-            cwd="temp-app-templates",
-            check=True,
-        )
-        Path("temp-app-templates/e2e-chatbot-app-next").rename("e2e-chatbot-app-next")
-        shutil.rmtree("temp-app-templates", ignore_errors=True)
+                print("ERROR: Tested chat frontend could not be downloaded. Check network access to GitHub.")
+                return False
         return True
 
     def start_process(self, cmd, name, log_file, patterns, cwd=None):
@@ -226,13 +214,9 @@ class ProcessManager:
                 print("WARNING: Failed to clone frontend. Continuing with backend only.")
                 self.no_ui = True
             else:
-                from scripts.frontend_attachments import ensure_frontend_attachments
-                from scripts.frontend_identity import ensure_frontend_identity
-                from scripts.frontend_safety import ensure_frontend_safety
+                from scripts.frontend_source import prepare_frontend
 
-                ensure_frontend_identity(Path("e2e-chatbot-app-next"))
-                ensure_frontend_safety(Path("e2e-chatbot-app-next"))
-                ensure_frontend_attachments(Path("e2e-chatbot-app-next"))
+                prepare_frontend(Path("e2e-chatbot-app-next"))
                 # Set API_PROXY environment variable for frontend to connect to backend
                 os.environ["API_PROXY"] = f"http://localhost:{self.port}/invocations"
 
@@ -261,7 +245,7 @@ class ProcessManager:
                 # name without a shell; resolve its full path (honors PATHEXT) so
                 # argument lists work on every platform.
                 npm = shutil.which("npm") or "npm"
-                for args, desc in [(["install"], "install"), (["run", "build"], "build")]:
+                for args, desc in [(["ci"], "ci"), (["run", "build"], "build")]:
                     print(f"Running npm {desc}...")
                     result = subprocess.run(  # nosemgrep: dangerous-subprocess-use-audit
                         [npm, *args], cwd=frontend_dir, capture_output=True, text=True
