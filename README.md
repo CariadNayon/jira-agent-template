@@ -1,314 +1,87 @@
-# Responses API Agent
+# Jira Agent (Databricks App)
 
-This template defines a conversational agent app. The app comes with a built-in chat UI, but also exposes an API endpoint for invoking the agent so that you can serve your UI elsewhere (e.g. on your website or in a mobile app).
+Persönlicher Jira- und Daten-Assistent als fertige Databricks App, gebaut mit OpenAI Agents SDK, MLflow `AgentServer` und Azure OpenAI.
 
-The agent in this template implements the [OpenAI Responses API](https://platform.openai.com/docs/api-reference/responses) interface. It ships with a sample `get_current_time` tool. The agent code includes commented-out examples showing how to connect to [Databricks MCP servers](https://docs.databricks.com/aws/en/generative-ai/agent-framework/agent-tool) (including the built-in code interpreter, Vector Search, Genie, and UC functions). You can customize agent code and test it via the API or UI.
+**Was der Agent kann**
+- **Jira** (mit dem persönlichen Token des Nutzers): Tickets suchen, Details lesen, Nutzer finden, Bearbeiter setzen, kommentieren, Labels setzen. Jede Änderung braucht die Bestätigung „ja <CODE>“.
+- **Daten** (mit den Rechten des Nutzers): freigegebene Unity-Catalog-Tabellen beschreiben und per `SELECT` über das SQL Warehouse abfragen.
+- **Ausgaben**: Diagramme (Balken, Linie, Torte, Streuung) sowie CSV- und Excel-Exporte.
+- **Ohne Code anpassbar** über das Zahnrad in der App: Name, Regeln in natürlicher Sprache, Modell, freigegebene Tabellen. Die Anleitung steht in der App unter `/jira/guide`.
 
-The agent input and output format are defined by MLflow's ResponsesAgent interface, which closely follows the [OpenAI Responses API](https://platform.openai.com/docs/api-reference/responses) interface. See [the MLflow docs](https://mlflow.org/docs/latest/genai/flavors/responses-agent-intro/) for input and output formats for streaming and non-streaming requests, tracing requirements, and other agent authoring details.
+## Mit KI weiterentwickeln (empfohlen)
 
-## Build with AI Assistance
+Repo in VS Code öffnen und Copilot oder Claude in normaler Sprache sagen, was du willst:
 
-We recommend using AI coding assistants (Claude Code, Cursor, GitHub Copilot) to customize and deploy this template. Agent Skills in `.claude/skills/` provide step-by-step guidance for common tasks like setup, adding tools, and deployment. These skills are automatically detected by Claude, Cursor, and GitHub Copilot.
+| Du sagst … | Die KI … |
+|---|---|
+| „Richte das Projekt ein.“ | meldet an, legt `.env` an |
+| „Baue ein Tool, das den Status eines Tickets ändert.“ | schreibt Tool und Test, führt die Tests aus |
+| „Starte die App lokal.“ | startet unter http://localhost:8000 |
+| „Deploye die App.“ | prüft, lädt hoch, startet neu und nennt die URL |
 
-## Quick start
+Die Regeln für die KI stehen in [AGENTS.md](AGENTS.md), die Abläufe in [.claude/skills/](.claude/skills/).
 
-Run the `uv run quickstart` script to quickly set up your local environment and start the agent server. At any step, if there are issues, refer to the manual local development loop setup below.
+## Wo was liegt
 
-This script will:
+| Hier änderst du | |
+|---|---|
+| [jira_agent/config.yaml](jira_agent/config.yaml) | Jira-URL, Azure-Modell, Limits und Standardregeln |
+| [databricks.yml](databricks.yml) → `variables` | **einzige** Stelle für App-Name, Secret (Azure-Key) und Warehouse |
+| [jira_agent/tools/](jira_agent/tools/) | Tools; neue Datei = neues Tool. Vorlage: `example_custom_tool.py` |
+| [tests/](tests/) | Tests; Vorlage für eigene Tools: `test_example_custom_tool.py` |
 
-1. Verify uv, nvm, and Databricks CLI installations
-2. Configure Databricks authentication
-3. Configure agent tracing, by creating and linking an MLflow experiment to your app
-4. Start the agent server and chat app
+Alles andere ist Unterbau (Übersicht in [AGENTS.md](AGENTS.md)).
 
-```bash
-uv run quickstart
+## Befehle
+
+Voraussetzungen: [uv](https://docs.astral.sh/uv/getting-started/installation/) ≥ 0.9.17, [Databricks CLI](https://docs.databricks.com/aws/en/dev-tools/cli/install), Node.js 20+.
+
+| Aufgabe | Befehl |
+|---|---|
+| Einrichten (einmalig) | `uv run quickstart --profile <profil> --skip-lakebase` |
+| Tests (ohne Jira oder Databricks) | `uv run pytest tests -q` |
+| Lokal starten | `uv run start-app`, danach http://localhost:8000 |
+| Deploy prüfen | `uv run deploy --check` |
+| Deployen | `uv run deploy` |
+| Bestehende App übernehmen | `uv run deploy --bind` |
+| Logs | `databricks apps logs <app_name> --profile <profil>` |
+
+`uv run deploy` prüft das Bundle ([databricks.yml](databricks.yml)), lädt den Code hoch und startet die App neu. Dabei werden diese Ressourcen eingerichtet:
+- `experiment`
+- `secret`, wird zur Umgebungsvariable `AZURE_OPENAI_KEY`
+- `sql-warehouse`, wird zur Umgebungsvariable `WAREHOUSE_ID`
+
+Außerdem setzt es die User-Scopes `sql:restricted-query`, `catalog.*:read` und `workspace.workspace`. Die Werte kommen aus `variables` in `databricks.yml` und lassen sich einmalig überschreiben: `uv run deploy --var app_name=agent-test`. Ohne Skript geht auch `databricks bundle deploy` und danach `databricks bundle run agent_openai_agents_sdk`. Ist bei einer im UI angelegten App keine Ressource gesetzt, nutzt die App die Standardwerte aus `databricks.yml`. Für CI gibt es die GitHub Action [.github/workflows/deploy.yml](.github/workflows/deploy.yml), sie führt `uv run deploy --target prod` aus.
+
+## Sicherheit und Betrieb
+
+- **Bestätigung:** Schreib-Tools (`write=True`) laufen nur, wenn der Nutzer einen Code bestätigt hat, der genau an diese Aktion gebunden ist.
+- **Genau 1 Worker:** Keys, Bestätigungscodes und erzeugte Dateien liegen nur im Arbeitsspeicher. `start-server` verweigert `--workers` > 1. Keys verfallen spätestens `session.credentials_ttl_hours` nach Beginn der Sitzung.
+- **SQL:** Erlaubt ist nur genau ein `SELECT` auf freigegebenen Tabellen und mit eingebauten Funktionen. `ai_query`, `http_request`, `secret`, `reflect`, UC-Funktionen usw. sind gesperrt ([data.py](jira_agent/data.py)).
+- **Bilder in der Chat-UI** werden per Content-Security-Policy nur von der App selbst geladen. So können eingeschleuste Markdown-Bilder keine Daten an fremde Server senden.
+- **Datenschutz:** MLflow-Traces enthalten Chat-Inhalte inklusive Ticket-Texten und Abfrageergebnissen (keine Keys). Den Zugriff auf das MLflow-Experiment deshalb restriktiv vergeben.
+
+## API
+
+Die App bietet die [OpenAI Responses API](https://platform.openai.com/docs/api-reference/responses) über MLflows `ResponsesAgent`. Aufrufe brauchen ein Databricks-OAuth-Token (`databricks auth token`), PATs funktionieren nicht. Details: [Query an agent](https://docs.databricks.com/aws/en/generative-ai/agent-framework/query-agent).
+
+```python
+from databricks.sdk import WorkspaceClient
+from databricks_openai import DatabricksOpenAI
+
+client = DatabricksOpenAI(workspace_client=WorkspaceClient())
+response = client.responses.create(model="apps/<app-name>", input=[{"role": "user", "content": "Meine offenen Tickets?"}])
 ```
 
-After the setup is complete, you can start the agent server and the chat app locally with:
-
-```bash
-uv run start-app
-```
-
-This will start the agent server and the chat app at http://localhost:8000.
-
-**Next steps**: see [modifying your agent](#modifying-your-agent) to customize and iterate on the agent code.
-
-## Manual local development loop setup
-
-1. **Set up your local environment**
-   Install `uv` (python package manager), `nvm` (node version manager), and the Databricks CLI:
-
-   - [`uv` installation docs](https://docs.astral.sh/uv/getting-started/installation/)
-   - [`nvm` installation](https://github.com/nvm-sh/nvm?tab=readme-ov-file#installing-and-updating)
-     - Run the following to use Node 20 LTS:
-       ```bash
-       nvm use 20
-       ```
-   - [`databricks CLI` installation](https://docs.databricks.com/aws/en/dev-tools/cli/install)
-
-2. **Set up local authentication to Databricks**
-
-   In order to access Databricks resources from your local machine while developing your agent, you need to authenticate with Databricks. Choose one of the following options:
-
-   **Option 1: OAuth via Databricks CLI (Recommended)**
-
-   Authenticate with Databricks using the CLI. See the [CLI OAuth documentation](https://docs.databricks.com/aws/en/dev-tools/cli/authentication#oauth-user-to-machine-u2m-authentication).
-
-   ```bash
-   databricks auth login
-   ```
-
-   Set the `DATABRICKS_CONFIG_PROFILE` environment variable in your .env file to the profile you used to authenticate:
-
-   ```bash
-   DATABRICKS_CONFIG_PROFILE="DEFAULT" # change to the profile name you chose
-   ```
-
-   **Option 2: Personal Access Token (PAT)**
-
-   See the [PAT documentation](https://docs.databricks.com/aws/en/dev-tools/auth/pat#databricks-personal-access-tokens-for-workspace-users).
-
-   ```bash
-   # Add these to your .env file
-   DATABRICKS_HOST="https://host.databricks.com"
-   DATABRICKS_TOKEN="dapi_token"
-   ```
-
-   See the [Databricks SDK authentication docs](https://docs.databricks.com/aws/en/dev-tools/sdk-python#authenticate-the-databricks-sdk-for-python-with-your-databricks-account-or-workspace).
-
-3. **Create and link an MLflow experiment to your app**
-
-   Create an MLflow experiment to enable tracing and version tracking. This is automatically done by the `uv run quickstart` script.
-
-   Create the MLflow experiment via the CLI:
-
-   ```bash
-   DATABRICKS_USERNAME=$(databricks current-user me | jq -r .userName)
-   databricks experiments create-experiment /Users/$DATABRICKS_USERNAME/agents-on-apps
-   ```
-
-   Make a copy of `.env.example` to `.env` and update the `MLFLOW_EXPERIMENT_ID` in your `.env` file with the experiment ID you created. The `.env` file will be automatically loaded when starting the server.
-
-   ```bash
-   cp .env.example .env
-   # Edit .env and fill in your experiment ID
-   ```
-
-   See the [MLflow experiments documentation](https://docs.databricks.com/aws/en/mlflow/experiments#create-experiment-from-the-workspace).
-
-4. **Test your agent locally**
-
-   Start up the agent server and chat UI locally:
-
-   ```bash
-   uv run start-app
-   ```
-
-   Query your agent via the UI (http://localhost:8000) or REST API:
-
-   **Advanced server options:**
-
-   ```bash
-   uv run start-server --reload   # hot-reload the server on code changes
-   uv run start-server --port 8001 # change the port the server listens on
-   uv run start-server --workers 4 # run the server with multiple workers
-   ```
-
-   - Example streaming request:
-     ```bash
-     curl -X POST http://localhost:8000/invocations \
-     -H "Content-Type: application/json" \
-     -d '{ "input": [{ "role": "user", "content": "hi" }], "stream": true }'
-     ```
-   - Example non-streaming request:
-     ```bash
-     curl -X POST http://localhost:8000/invocations  \
-     -H "Content-Type: application/json" \
-     -d '{ "input": [{ "role": "user", "content": "hi" }] }'
-     ```
-
-## Modifying your agent
-
-See the [OpenAI Agents SDK documentation](https://platform.openai.com/docs/guides/agents-sdk) for more information on how to edit your own agent.
-
-Required files for hosting with MLflow `AgentServer`:
-
-- `agent.py`: Contains your agent logic. Modify this file to create your custom agent. For example, you can [add agent tools](https://docs.databricks.com/aws/en/generative-ai/agent-framework/agent-tool) to give your agent additional capabilities
-- `start_server.py`: Initializes and runs the MLflow `AgentServer` with agent_type="ResponsesAgent". You don't have to modify this file for most common use cases, but can add additional server routes (e.g. a `/metrics` endpoint) here
-
-**Common customization questions:**
-
-**Q: Can I add additional files or folders to my agent?**
-Yes. Add additional files or folders as needed. Ensure the script within `pyproject.toml` runs the correct script that starts the server and sets up MLflow tracing.
-
-**Q: How do I add dependencies to my agent?**
-Run `uv add <package_name>` (e.g., `uv add "mlflow-skinny[databricks]"`). See the [python pyproject.toml guide](https://packaging.python.org/en/latest/guides/writing-pyproject-toml/#dependencies-and-requirements).
-
-**Q: Can I add custom tracing beyond the built-in tracing?**
-Yes. This template uses MLflow's agent server, which comes with automatic tracing for agent logic decorated with `@invoke()` and `@stream()`. It also uses [MLflow autologging APIs](https://mlflow.org/docs/latest/genai/tracing/#one-line-auto-tracing-integrations) to capture traces from LLM invocations. However, you can add additional instrumentation to capture more granular trace information when your agent runs. See the [MLflow tracing documentation](https://docs.databricks.com/aws/en/mlflow3/genai/tracing/app-instrumentation/).
-
-**Q: How can I extend this example with additional tools and capabilities?**
-This template can be extended by integrating additional MCP servers, Vector Search Indexes, UC Functions, and other Databricks tools. See the ["Agent Framework Tools Documentation"](https://docs.databricks.com/aws/en/generative-ai/agent-framework/agent-tool).
-
-## Evaluating your agent
-
-Evaluate your agent by calling the invoke function you defined for the agent locally.
-
-- Update your `evaluate_agent.py` file with the preferred evaluation dataset and scorers.
-
-Run the evaluation using the evaluation script:
-
-```bash
-uv run agent-evaluate
-```
-
-After it completes, open the MLflow UI link for your experiment to inspect results.
-
-## Deploying to Databricks Apps
-
-This template uses [Databricks Asset Bundles (DABs)](https://docs.databricks.com/aws/en/dev-tools/bundles/) for deployment. The `databricks.yml` file defines the app configuration and resource permissions.
-
-> **`app.yaml` vs `databricks.yml`**: `app.yaml` is used when deploying via `databricks apps deploy` (manual path). When deploying via DABs (`databricks bundle deploy`), the `config:` section in `databricks.yml` takes precedence. If you change environment variables or the start command, update `databricks.yml` — that's what DABs reads.
-
-Ensure you have the [Databricks CLI](https://docs.databricks.com/aws/en/dev-tools/cli/tutorial) installed and configured.
-
-1. **Run the pre-flight check**
-
-   Start the agent locally, send a test request, and verify the response to catch configuration and code errors early:
-
-   ```bash
-   uv run preflight
-   ```
-
-2. **Validate the bundle configuration**
-
-   Catch any configuration errors before deploying:
-
-   ```bash
-   databricks bundle validate
-   ```
-
-3. **Deploy the bundle**
-
-   This uploads your code and configures resources (MLflow experiment, serving endpoints, etc.) defined in `databricks.yml`:
-
-   ```bash
-   databricks bundle deploy
-   ```
-
-4. **Start or restart the app**
-
-   ```bash
-   databricks bundle run agent_openai_agents_sdk
-   ```
-
-   > **Note:** `bundle deploy` only uploads files and configures resources. `bundle run` is **required** to actually start/restart the app with the new code.
-
-   To grant access to additional resources (serving endpoints, genie spaces, UC Functions, Vector Search), add them to `databricks.yml` and redeploy. See the [Databricks Apps resources documentation](https://docs.databricks.com/aws/en/dev-tools/databricks-apps/resources).
-
-   **On-behalf-of (OBO) User Authentication**: Use `get_user_workspace_client()` from `agent_server.utils` to authenticate as the requesting user instead of the app service principal. See the [OBO authentication documentation](https://docs.databricks.com/aws/en/dev-tools/databricks-apps/auth?language=Streamlit#retrieve-user-authorization-credentials).
-
-5. **Query your agent hosted on Databricks Apps**
-
-   You must use a Databricks OAuth token to query agents hosted on Databricks Apps. See [Query an agent](https://docs.databricks.com/aws/en/generative-ai/agent-framework/query-agent) for full details.
-
-   **Using the Databricks OpenAI client (Python):**
-
-   ```bash
-   uv pip install databricks-openai
-   ```
-
-   ```python
-   from databricks.sdk import WorkspaceClient
-   from databricks_openai import DatabricksOpenAI
-
-   w = WorkspaceClient()
-   client = DatabricksOpenAI(workspace_client=w)
-
-   # Non-streaming
-   response = client.responses.create(
-       model="apps/<app-name>",
-       input=[{"role": "user", "content": "hi"}],
-   )
-   print(response)
-
-   # Streaming
-   streaming_response = client.responses.create(
-       model="apps/<app-name>",
-       input=[{"role": "user", "content": "hi"}],
-       stream=True,
-   )
-   for chunk in streaming_response:
-       print(chunk)
-   ```
-
-   **Using curl:**
-
-   ```bash
-   # Generate an OAuth token
-   databricks auth login --host <https://host.databricks.com>
-   databricks auth token
-   ```
-
-   ```bash
-   # Streaming request
-   curl --request POST \
-     --url <app-url>.databricksapps.com/responses \
-     --header "Authorization: Bearer <oauth-token>" \
-     --header "Content-Type: application/json" \
-     --data '{
-       "input": [{ "role": "user", "content": "hi" }],
-       "stream": true
-     }'
-   ```
-
-   ```bash
-   # Non-streaming request
-   curl --request POST \
-     --url <app-url>.databricksapps.com/responses \
-     --header "Authorization: Bearer <oauth-token>" \
-     --header "Content-Type: application/json" \
-     --data '{
-       "input": [{ "role": "user", "content": "hi" }]
-     }'
-   ```
-
-For future updates, run `databricks bundle deploy` and `databricks bundle run agent_openai_agents_sdk` to redeploy.
-
-### Common Issues
-
-- **`databricks bundle deploy` fails with "An app with the same name already exists"**
-
-  This happens when an app with the same name was previously created outside of DABs. To fix, bind the existing app to your bundle:
-
-  ```bash
-  # 1. Get the existing app's config (note the budget_policy_id if present)
-  databricks apps get <app-name> --output json | jq '{name, budget_policy_id, description}'
-
-  # 2. Update databricks.yml to include budget_policy_id if it was returned above
-
-  # 3. Bind the existing app to your bundle
-  databricks bundle deployment bind agent_openai_agents_sdk <app-name> --auto-approve
-
-  # 4. Deploy
-  databricks bundle deploy
-  ```
-
-  Alternatively, delete the existing app and deploy fresh: `databricks apps delete <app-name>` (this permanently removes the app's URL and service principal).
-
-- **`databricks bundle deploy` fails with "Provider produced inconsistent result after apply"**
-
-  The existing app has server-side configuration (like `budget_policy_id`) that doesn't match your `databricks.yml`. Run `databricks apps get <app-name> --output json` and sync any missing fields to your `databricks.yml`.
-
-- **App is running old code after `databricks bundle deploy`**
-
-  `bundle deploy` only uploads files and configures resources. You must run `databricks bundle run agent_openai_agents_sdk` to actually start/restart the app with the new code.
-
-### FAQ
-
-- For a streaming response, I see a 200 OK in the logs, but an error in the actual stream. What's going on?
-  - This is expected behavior. The initial 200 OK confirms stream setup; streaming errors don't affect this status.
-- When querying my agent, I get a 302 error. What's going on?
-  - Use an OAuth token. PATs are not supported for querying agents.
+Lokal: `curl -X POST http://localhost:8000/invocations -H "Content-Type: application/json" -d '{"input":[{"role":"user","content":"hi"}]}'`
+
+## Probleme
+
+| Problem | Lösung |
+|---|---|
+| `An app with the same name already exists` | `uv run deploy --bind` (übernimmt die App) oder `app_name` in `databricks.yml` ändern |
+| App läuft mit altem Code | `uv run deploy` startet immer neu; danach die Seite mit Strg+Shift+R neu laden |
+| `Provider produced inconsistent result after apply` | `databricks apps get <name> -o json` ansehen und Felder wie `budget_policy_id` in `databricks.yml` übernehmen |
+| Stream meldet 200, aber Fehler im Inhalt | normal: Fehler beim Streaming kommen im Stream selbst |
+| HTTP 302 beim API-Aufruf | OAuth-Token statt PAT verwenden |
+| Warnung `exclude-newer = "7 days"` | `uv self update` |

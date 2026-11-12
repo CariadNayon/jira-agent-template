@@ -32,23 +32,24 @@
 </ul>
 
 <h2 id="tool">2. Eigenes Tool hinzufügen</h2>
-<p>Neue Datei in <code>jira_agent/tools/</code> anlegen, z. B. <code>mein_tool.py</code>. Sie wird automatisch geladen. Vorlage: <code>jira_agent/tools/example_custom_tool.py</code>.</p>
-<pre><code>from jira_agent.jira_client import JiraClient
-from jira_agent.tools import ToolContext, tool
+<p><b>Am einfachsten mit KI:</b> Repo in VS Code öffnen und Copilot/Claude z. B. sagen: <i>„Baue ein Tool, das den Status eines Tickets ändert.“</i> Die KI kennt die Regeln dieses Projekts (AGENTS.md), schreibt Tool und Test und kann deployen.</p>
+<p>Von Hand: neue Datei in <code>jira_agent/tools/</code> anlegen, z. B. <code>mein_tool.py</code>. Sie wird automatisch geladen. Vorlage: <code>jira_agent/tools/example_custom_tool.py</code>.</p>
+<pre><code>from jira_agent.tools import ToolContext, tool
 
 
-@tool("Setzt ein Label an einem Jira-Ticket, z. B. 'auto-routed'.",   # Beschreibung für das Modell
-      {"issue_key": {"type": "string"}, "label": {"type": "string"}},  # Parameter (JSON-Schema)
-      ["issue_key", "label"],                                           # Pflichtfelder
-      write=True,                                                      # ändert etwas -> Bestätigung nötig
-      needs=["jira"])                                                  # nur sichtbar mit Jira-Token
-def jira_add_label(ctx: ToolContext, issue_key: str, label: str) -> dict:
-    key = JiraClient.check_key(issue_key)
-    r = ctx.jira.request("PUT", f"/issue/{key}", json={"update": {"labels": [{"add": label}]}})
-    return {"status": "OK"} if r.status_code == 204 else {"error": r.status_code}</code></pre>
+@tool(write=True, needs=["jira"])          # ändert etwas -> Bestätigung nötig; nur mit Jira-Token
+def jira_set_status(ctx: ToolContext, issue_key: str, status: str) -> dict:
+    """Ändert den Status eines Tickets, z. B. 'In Arbeit' oder 'Erledigt'.
+
+    issue_key: Ticket-Key, z. B. ABC-123
+    status: Name des Statuswechsels oder Zielstatus
+    """
+    ctx.jira.transition(issue_key, status)
+    return {"status": "OK"}</code></pre>
 <ul>
+  <li><b>Docstring</b>: erster Absatz = Beschreibung für das Modell, Zeilen <code>name: Text</code> = Beschreibung der Parameter. Typen kommen aus den Angaben wie <code>str</code>, <code>int</code>, <code>list[str]</code>.</li>
   <li><b>Erstes Argument ist immer <code>ctx</code></b>:
-    <code>ctx.jira</code> (Jira-Client mit dem Token des Nutzers),
+    <code>ctx.jira</code> (Jira mit dem Token des Nutzers – fertige Helfer: <code>search</code>, <code>issue</code>, <code>create_issue</code>, <code>transition</code>, <code>assign</code>, <code>comment</code>, <code>set_priority</code>, <code>add_label</code>, <code>link</code>, <code>add_worklog</code>, …),
     <code>ctx.sql</code> (lesendes SQL mit Nutzerrechten: <code>ctx.sql.query(...)</code>, <code>ctx.sql.describe(...)</code>),
     <code>ctx.files</code> (Datei zum Download ablegen: <code>ctx.files.put(name, mime, bytes)</code> liefert eine URL),
     <code>ctx.selected_tables</code> (freigegebene Tabellen).</li>
@@ -56,6 +57,7 @@ def jira_add_label(ctx: ToolContext, issue_key: str, label: str) -> dict:
   <li><b><code>write=True</code></b> für alles, was etwas verändert: Der Agent muss dann vorher „ja &lt;CODE&gt;“ einholen. Das ist im Code erzwungen, Sie müssen nichts weiter tun.</li>
   <li><b>Rückgabe</b>: ein <code>dict</code>. Fehler einfach als Exception werfen – der Agent bekommt sie als Text.</li>
   <li>Bilder oder Downloads: im Ergebnis ein Feld <code>"markdown"</code> zurückgeben, z. B. <code>f"![Titel]({url})"</code> – siehe <code>output_tools.py</code>.</li>
+  <li><b>Testen ohne echtes Jira</b>: Vorlage <code>tests/test_example_custom_tool.py</code>, ausführen mit <code>uv run pytest tests -q</code>.</li>
 </ul>
 
 <h2 id="modell">3. Weiteres Modell anbinden</h2>
@@ -67,28 +69,24 @@ def _mein_modell(cfg: dict, settings: dict, creds: dict):
     return _azure_model(api_key, endpoint, api_version, deployment)   # Modell für Agent(model=...)</code></pre>
 
 <h2 id="config">4. Standardwerte ändern</h2>
-<p><code>jira_agent/config.yaml</code>: Jira-URL, Azure-Endpoint und Deployment, Warehouse, Zeilenlimits, Standardregeln, Ablaufzeiten für Keys und Dateien. Nutzer überschreiben Regeln, Name, Modell und Tabellen persönlich im Zahnrad.</p>
+<p><code>jira_agent/config.yaml</code>: Jira-URL, Azure-Endpoint und Deployment, Zeilenlimits, Standardregeln und Ablaufzeiten. <code>databricks.yml</code> unter <code>variables</code>: App-Name, Secret (Azure-Key) und Warehouse. Nutzer überschreiben Regeln, Name, Modell und Tabellen persönlich im Zahnrad.</p>
 
-<h2 id="kopie">5. Eigene Kopie der App</h2>
+<h2 id="kopie">5. Eigene Kopie der App / Deploy</h2>
 <ol>
-  <li>Den Quellordner der App (mit <code>agent_server/</code>, <code>jira_agent/</code>, <code>app.yaml</code>, <code>pyproject.toml</code>) kopieren.</li>
-  <li><b>Compute → Apps → Create app</b>, Quellordner wählen.</li>
-  <li>App-Ressourcen mit genau diesen Namen hinzufügen:
-    <ul>
-      <li><code>secret</code> – Secret <code>defmgtai-eu-we-dev-adb-local-secret-scope</code> / <code>gpt-4-api-key</code>, Can read</li>
-      <li><code>sql-warehouse</code> – SQL Warehouse, Can use</li>
-      <li><code>experiment</code> – MLflow-Experiment für Traces, Can edit</li>
-    </ul></li>
-  <li><b>User authorization</b> – Scopes: <code>sql:restricted-query</code>, <code>catalog.catalogs:read</code>, <code>catalog.schemas:read</code>, <code>catalog.tables:read</code>, <code>workspace.workspace</code>.</li>
-  <li><b>Deploy</b> – nach jeder Code-Änderung erneut deployen und die Seite mit Strg+Shift+R neu laden.</li>
+  <li>Repo kopieren (Fork) und in VS Code öffnen. Einmalig einrichten: Copilot/Claude sagen <i>„Richte das Projekt ein.“</i></li>
+  <li>In <code>databricks.yml</code> unter <code>variables</code> bei <code>app_name</code> einen eigenen Namen eintragen (z. B. <code>agent-jira-team-x</code>), ggf. Secret und Warehouse anpassen.</li>
+  <li>Deployen: <code>uv run deploy</code> (oder der KI sagen <i>„Deploye die App.“</i>). Das legt die App mit allen Ressourcen und Scopes an, lädt den Code hoch und startet sie.</li>
+  <li>In Databricks unter <b>Compute → Apps → Name → Permissions</b> festlegen, wer die App nutzen darf.</li>
+  <li>Nach jeder Änderung erneut <code>uv run deploy</code> und die Seite mit Strg+Shift+R neu laden.</li>
 </ol>
-<p class="hint">Die App mit einer Instanz betreiben: Keys liegen nur im Arbeitsspeicher und gehen bei Neustart oder Deploy verloren.</p>
+<p class="hint">Die App mit einer Instanz und einem Worker betreiben: Keys liegen nur im Arbeitsspeicher und gehen bei Neustart oder Deploy verloren.</p>
+<p class="hint">MLflow-Traces enthalten Chat-Inhalte (auch Ticket-Texte und Abfrageergebnisse, keine Keys) – Zugriff auf das Experiment restriktiv vergeben.</p>
 
 <h2 id="sicherheit">6. Sicherheitsregeln</h2>
 <ul>
   <li>Keine Keys oder Tokens in Code, Logs, Tool-Ergebnissen oder <code>settings.json</code>.</li>
   <li>Alles, was in Jira oder anderen Systemen etwas ändert, mit <code>write=True</code> markieren.</li>
-  <li>SQL nur über <code>ctx.sql</code> und <code>check_readonly_sql</code> (nur SELECT, nur freigegebene Tabellen).</li>
+  <li>SQL nur über <code>ctx.sql</code> und <code>check_readonly_sql</code> (nur SELECT, nur freigegebene Tabellen, nur eingebaute Funktionen – kein <code>ai_query</code>, <code>http_request</code>, <code>secret</code>, keine UDFs).</li>
   <li>Eingaben prüfen, z. B. <code>JiraClient.check_key()</code> für Ticket-Keys.</li>
 </ul>
 </main>

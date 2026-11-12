@@ -1,0 +1,85 @@
+bundle:
+  name: agent_jira
+
+# EINZIGE Stelle für App-Name, Secret und Warehouse. Die App liest diese Standardwerte auch zur Laufzeit,
+# falls keine App-Ressource gesetzt ist (z. B. lokal oder bei einer im UI angelegten App).
+# Überschreiben ohne Datei-Änderung: databricks bundle deploy --var="app_name=agent-jira-test"
+variables:
+  app_name:
+    description: "Name der App (Kleinbuchstaben, Ziffern, Bindestriche)"
+    default: agent-jira-v2
+  secret_scope:
+    description: "Secret Scope des zentralen Azure-OpenAI-Keys"
+    default: defmgtai-eu-we-dev-adb-local-secret-scope
+  secret_key:
+    description: "Key im Secret Scope"
+    default: gpt-4-api-key
+  warehouse_id:
+    description: "SQL Warehouse für Abfragen"
+    default: "822757479507240e"
+
+resources:
+  apps:
+    # Resource key kept as "agent_openai_agents_sdk" so `databricks bundle run agent_openai_agents_sdk` keeps working.
+    agent_openai_agents_sdk:
+      name: ${var.app_name}
+      description: "Persönlicher Jira- und Daten-Assistent (OpenAI Agents SDK)"
+      source_code_path: ./
+      config:
+        command: ["uv", "run", "start-app"]
+        env:
+          - name: MLFLOW_TRACKING_URI
+            value: "databricks"
+          - name: MLFLOW_REGISTRY_URI
+            value: "databricks-uc"
+          - name: API_PROXY
+            value: "http://localhost:8000/invocations"
+          - name: CHAT_APP_PORT
+            value: "3000"
+          - name: CHAT_PROXY_TIMEOUT_SECONDS
+            value: "300"
+          - name: MLFLOW_EXPERIMENT_ID
+            value_from: "experiment"
+          # Jira-Agent: zentraler Azure-OpenAI-Key und Warehouse (siehe jira_agent/config.yaml)
+          - name: AZURE_OPENAI_KEY
+            value_from: "secret"
+          - name: WAREHOUSE_ID
+            value_from: "sql-warehouse"
+
+      # Resources which this app has access to (as the app's service principal)
+      resources:
+        - name: 'experiment'
+          experiment:
+            experiment_id: ""
+            permission: 'CAN_MANAGE'
+
+        - name: 'secret'
+          secret:
+            scope: ${var.secret_scope}
+            key: ${var.secret_key}
+            permission: 'READ'
+
+        - name: 'sql-warehouse'
+          sql_warehouse:
+            id: ${var.warehouse_id}
+            permission: 'CAN_USE'
+
+      # On-behalf-of-user access: SQL, Unity Catalog browsing and the user's settings file in their home folder
+      user_api_scopes:
+        - sql:restricted-query
+        - catalog.catalogs:read
+        - catalog.schemas:read
+        - catalog.tables:read
+        - workspace.workspace
+
+targets:
+  dev:
+    mode: development
+    default: true
+    # workspace:
+    #   host: https://...
+
+  prod:
+    mode: production
+    # workspace:
+    #   host: https://...

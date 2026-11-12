@@ -1,0 +1,17 @@
+version: 1
+name: "Jira Agent"
+description: "Persönlicher Jira- und Daten-Assistent (OpenAI Agents SDK, MLflow AgentServer, Azure OpenAI)"
+
+resource_specs:
+  - name: "experiment"
+    description: "The destination experiment for traces from the agent's execution."
+    experiment_spec:
+      permission: "CAN_EDIT"
+  - name: "secret"
+    description: "Zentraler Azure-OpenAI-Key (Umgebungsvariable AZURE_OPENAI_KEY)."
+    secret_spec:
+      permission: "READ"
+  - name: "sql-warehouse"
+    description: "SQL Warehouse für lesende Abfragen auf freigegebenen Tabellen (Umgebungsvariable WAREHOUSE_ID)."
+    sql_warehouse_spec:
+      permission: "CAN_USE"

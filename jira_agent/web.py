@@ -22,6 +22,7 @@ from jira_agent.state import get_file, logout, user_state
 
 _STATIC = Path(__file__).parent / "static"
 _UI_TAG = b'<script src="/jira/static/ui.js" defer></script>'
+_CSP = "img-src 'self' data: blob:"
 
 router = APIRouter(prefix="/jira")
 
@@ -211,4 +212,7 @@ def install(app: FastAPI) -> None:
         headers = {k: v for k, v in response.headers.items()
                    if k.lower() not in ("content-length", "content-encoding", "etag", "last-modified")}
         headers["cache-control"] = "no-store"
+        # Bilder nur von der App selbst: verhindert, dass ein (z. B. per Prompt-Injection aus einem Ticket)
+        # erzeugtes Markdown-Bild Daten über die URL an fremde Server schickt.
+        headers["content-security-policy"] = _CSP
         return Response(inject_ui(body), status_code=response.status_code, headers=headers)

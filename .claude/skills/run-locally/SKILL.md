@@ -1,90 +1,53 @@
 ---
 name: run-locally
-description: "Run and test the agent locally. Use when: (1) User says 'run locally', 'start server', 'test agent', or 'localhost', (2) Need curl commands to test API, (3) Troubleshooting local development issues, (4) Configuring server options like port or hot-reload."
+description: "Jira-Agent lokal starten und testen. Verwenden bei: 'lokal starten', 'run locally', 'start server', 'localhost', 'testen', Fehler beim lokalen Start."
 ---
 
-# Run Agent Locally
+# Lokal starten und testen
 
-## Start the Server
+## Tests (immer zuerst)
+
+```bash
+uv run pytest tests -q
+```
+
+Läuft ohne Databricks, Jira oder Modell (FakeJira/FakeSql aus `jira_agent/testing.py`).
+
+## App starten
 
 ```bash
 uv run start-app
 ```
 
-This starts the agent at http://localhost:8000
+Chat unter http://localhost:8000, Zahnrad oben rechts für Jira-Token, Regeln und Tabellen.
 
-## Server Options
-
-```bash
-# Hot-reload on code changes (development)
-uv run start-server --reload
-
-# Custom port
-uv run start-server --port 8001
-
-# Multiple workers (production-like)
-uv run start-server --workers 4
-
-# Combine options
-uv run start-server --reload --port 8001
-```
-
-## Test the API
-
-**Streaming request:**
-```bash
-curl -X POST http://localhost:8000/invocations \
-  -H "Content-Type: application/json" \
-  -d '{ "input": [{ "role": "user", "content": "hi" }], "stream": true }'
-```
-
-**Non-streaming request:**
-```bash
-curl -X POST http://localhost:8000/invocations \
-  -H "Content-Type: application/json" \
-  -d '{ "input": [{ "role": "user", "content": "hi" }] }'
-```
-
-## Run Evaluation
+Optionen (werden an den Server durchgereicht):
 
 ```bash
-uv run agent-evaluate
+uv run start-server --reload      # Neustart bei Code-Änderungen
+uv run start-server --port 8001   # anderer Port
 ```
 
-Uses MLflow scorers (RelevanceToQuery, Safety).
+Immer nur **1 Worker** – `--workers` > 1 wird abgelehnt (Sitzungsdaten liegen im Speicher).
 
-## Run Unit Tests
+## API direkt testen
 
 ```bash
-pytest [path]
+curl -X POST http://localhost:8000/invocations -H "Content-Type: application/json" \
+  -d '{ "input": [{ "role": "user", "content": "Welche Tabellen sind freigegeben?" }] }'
 ```
 
-## Troubleshooting
+## Probleme
 
-| Issue | Solution |
-|-------|----------|
-| **Port already in use** | Use `--port 8001` or kill existing process |
-| **Authentication errors** | Verify `.env` is correct; run **quickstart** skill |
-| **Module not found** | Run `uv sync` to install dependencies |
-| **MLflow experiment not found** | Ensure `MLFLOW_TRACKING_URI` in `.env` is `databricks://<profile-name>` |
+| Problem | Lösung |
+|---|---|
+| Port belegt | `--port 8001` oder alten Prozess beenden |
+| Anmeldefehler | `.env` prüfen; `databricks auth login --profile <profil>`; Skill **einrichten** |
+| `Module not found` | `uv sync` |
+| MLflow-Experiment nicht gefunden | In `.env` `MLFLOW_TRACKING_URI="databricks://<profil>"` setzen |
+| Warnung `exclude-newer = "7 days"` | uv aktualisieren: `uv self update` |
 
-### MLflow Experiment Not Found
+## Weiter
 
-If you see: "The provided MLFLOW_EXPERIMENT_ID environment variable value does not exist"
-
-**Verify the experiment exists:**
-```bash
-databricks -p <profile> experiments get-experiment <experiment_id>
-```
-
-**Fix:** Ensure `.env` has the correct tracking URI format:
-```bash
-MLFLOW_TRACKING_URI="databricks://DEFAULT"  # Include profile name
-```
-
-The quickstart script configures this automatically. If you manually edited `.env`, ensure the profile name is included.
-
-## Next Steps
-
-- Modify your agent: see **modify-agent** skill
-- Deploy to Databricks: see **deploy** skill
+- Neues Tool: Skill **neues-tool**
+- Deployen: Skill **deploy**

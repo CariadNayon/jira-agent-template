@@ -4,6 +4,7 @@ from scripts.app_diagnostics import install_diagnostics  # noqa: E402
 
 install_diagnostics()
 
+import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -27,5 +28,16 @@ install_jira_web(app)
 setup_mlflow_git_based_version_tracking()
 
 
+def require_single_worker(argv: list[str]) -> None:
+    """Keys, Bestätigungscodes und Dateien liegen im Speicher eines Prozesses – mehrere Worker würden sie verlieren."""
+    for i, arg in enumerate(argv):
+        value = arg.split("=", 1)[1] if arg.startswith("--workers=") else (
+            argv[i + 1] if arg == "--workers" and i + 1 < len(argv) else None)
+        if value is not None and value.strip() != "1":
+            raise SystemExit("Der Jira-Agent hält Sitzungsdaten im Speicher und muss mit genau 1 Worker laufen "
+                             f"(--workers {value} ist nicht erlaubt).")
+
+
 def main():
+    require_single_worker(sys.argv[1:])
     agent_server.run(app_import_string="agent_server.start_server:app")

@@ -12,3 +12,15 @@ from pathlib import Path
 import yaml
 
 CFG = yaml.safe_load((Path(__file__).parent / "config.yaml").read_text(encoding="utf-8"))
+
+
+def _bundle_defaults() -> dict:
+    """Standardwerte der Variablen aus databricks.yml (app_name, secret_scope, secret_key, warehouse_id)."""
+    path = Path(__file__).parent.parent / "databricks.yml"
+    if not path.exists():
+        return {}
+    variables = (yaml.safe_load(path.read_text(encoding="utf-8")) or {}).get("variables") or {}
+    return {name: str(v.get("default", "")) for name, v in variables.items() if isinstance(v, dict)}
+
+
+BUNDLE = _bundle_defaults()

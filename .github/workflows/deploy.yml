@@ -19,8 +19,8 @@
 # Trigger manually from the Actions tab, or uncomment the `push` trigger
 # below to deploy on every push to main.
 #
-# This file is synced from .scripts/source/.github/workflows/deploy.yml —
-# edit the source, then run `uv run python .scripts/sync-scripts.py`.
+# This file was originally synced from .scripts/source/.github/workflows/deploy.yml;
+# it is now maintained in this repo (deploy via `uv run deploy`).
 
 name: Deploy to Databricks Apps
 
@@ -50,13 +50,9 @@ jobs:
       - name: Install Databricks CLI
         uses: databricks/setup-cli@6a2e75f1f954d87503702c408deea63216c0799d # v1.18.0
 
-      - name: Validate bundle
-        run: databricks bundle validate --target prod
+      - name: Install uv
+        uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
 
-      - name: Deploy bundle
-        run: databricks bundle deploy --target prod
-
-      # `bundle deploy` uploads files and configures resources, but does NOT
-      # restart the app. Without `bundle run`, the app keeps serving old code.
-      - name: Start / restart app
-        run: databricks bundle run agent_openai_agents_sdk --target prod
+      # Liest App-Name, Secret und Warehouse aus jira_agent/config.yaml, prüft, lädt hoch und startet neu.
+      - name: Deploy
+        run: uv run deploy --target prod

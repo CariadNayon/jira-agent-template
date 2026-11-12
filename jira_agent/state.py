@@ -33,11 +33,14 @@ class UserState:
     jira_display_name: str | None = None              # z. B. "Lenz, Nayon" – für den Standardnamen
     settings: dict | None = None
     secret: bytes = field(default_factory=lambda: secrets.token_bytes(32))
-    touched: float = field(default_factory=time.time)
+    created: float = field(default_factory=time.time)
     files: dict = field(default_factory=dict)
 
     def __repr__(self) -> str:
         return f"UserState(jira={self.jira_user is not None}, files={len(self.files)})"
+
+    def expired(self, now: float) -> bool:
+        return now - self.created > _CRED_TTL
 
 
 _users: dict[str, UserState] = {}
@@ -45,11 +48,14 @@ _lock = threading.Lock()
 
 
 def _get(email: str) -> UserState:
+    """Sitzung des Nutzers. Verfällt spätestens credentials_ttl_hours nach dem Anlegen (nicht gleitend)."""
+    now = time.time()
+    for key in [k for k, s in _users.items() if s.expired(now)]:
+        _users.pop(key)
     state = _users.get(email)
-    if state is None or time.time() - state.touched > _CRED_TTL:
+    if state is None:
         state = UserState()
         _users[email] = state
-    state.touched = time.time()
     return state
 
 
@@ -90,7 +96,7 @@ class FileSink:
 def get_file(email: str, fid: str) -> StoredFile | None:
     with _lock:
         state = _users.get(email)
-        if not state:
+        if not state or state.expired(time.time()):
             return None
         f = state.files.get(fid)
         if f and time.time() - f.created > _FILE_TTL:

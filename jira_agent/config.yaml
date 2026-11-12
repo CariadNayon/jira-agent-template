@@ -1,4 +1,5 @@
-# Zentrale Standardwerte. Nutzer ändern Regeln, Modell und Tabellen persönlich über das Zahnrad.
+# Zentrale Standardwerte. App-Name, Secret und Warehouse stehen in databricks.yml (variables).
+# Nutzer ändern Regeln, Modell und Tabellen persönlich über das Zahnrad.
 
 jira:
   base_url: https://devstack.vwgroup.com/jira/rest/api/2
@@ -8,13 +9,9 @@ llm:
   azure_endpoint: https://inc43errormana0783142845.cognitiveservices.azure.com/
   api_version: 2024-12-01-preview
   deployment: gpt-4o-2
-  # Zentraler Team-Key: als App-Ressource "secret" (Umgebungsvariable AZURE_OPENAI_KEY),
-  # sonst direkt aus diesem Secret Scope (Service Principal der App braucht READ).
-  secret_scope: defmgtai-eu-we-dev-adb-local-secret-scope
-  secret_key: gpt-4-api-key
+  # Zentraler Team-Key: App-Ressource "secret" (AZURE_OPENAI_KEY), sonst Secret aus databricks.yml.
 
 data:
-  warehouse_id: 822757479507240e         # wird durch die App-Ressource WAREHOUSE_ID überschrieben
   row_limit: 200                         # Zeilen pro Abfrage im Chat
   export_row_limit: 5000                 # Zeilen pro Export / Diagramm
 
@@ -27,5 +24,5 @@ agent:
       "Kritisch – bitte priorisieren".
 
 session:
-  credentials_ttl_hours: 8               # Keys verfallen spätestens danach (nur im Speicher)
+  credentials_ttl_hours: 8               # Keys verfallen spätestens so lange nach Sitzungsbeginn (nur im Speicher)
   files_ttl_minutes: 60                  # erzeugte Diagramme/Exporte

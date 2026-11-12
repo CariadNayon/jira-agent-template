@@ -5,7 +5,7 @@ import os
 import re
 from typing import Mapping
 
-from jira_agent import CFG
+from jira_agent import BUNDLE, CFG
 from jira_agent.adapter import RunContext, build_function_tools
 from jira_agent.data import SqlRunner
 from jira_agent.jira_client import JiraClient
@@ -14,7 +14,7 @@ from jira_agent.settings_store import SettingsStore
 from jira_agent.state import FileSink, UserState, user_state
 from jira_agent.tools import ToolContext
 
-WAREHOUSE_ID = os.environ.get("WAREHOUSE_ID") or CFG["data"]["warehouse_id"]
+WAREHOUSE_ID = os.environ.get("WAREHOUSE_ID") or BUNDLE.get("warehouse_id", "")
 
 DEFAULT_SETTINGS = {
     "agent_name": "",
@@ -103,7 +103,11 @@ def prepare(headers: Mapping[str, str], messages: list[dict]):
     from agents import Agent
 
     email, token = identity(headers)
-    email = email or "local"
+    if not email:
+        # Ohne Nutzerkennung teilen sich alle Aufrufer den Zustand "local" – nur lokal zulässig.
+        if os.environ.get("DATABRICKS_APP_NAME"):
+            raise PermissionError("Anfrage ohne Nutzerkennung (x-forwarded-email) abgelehnt.")
+        email = "local"
     state = user_state(email)
     settings = load_settings(state, email, token)
     tables = list(settings["selected_tables"])

@@ -7,9 +7,11 @@ from __future__ import annotations
 
 import os
 import re
+import time
 from dataclasses import dataclass
 from typing import Callable
 
+from jira_agent import BUNDLE
 from jira_agent.secrets import get_app_secret
 
 
@@ -49,15 +51,22 @@ def _azure_model(api_key: str, endpoint: str, api_version: str, deployment: str)
     return OpenAIChatCompletionsModel(model=deployment, openai_client=client)
 
 
-_central_key: dict[str, str] = {}
+_central_key: dict[str, object] = {}
+_CENTRAL_KEY_TTL = 15 * 60  # Sekunden; danach neu lesen, damit eine Key-Rotation ohne Neustart greift
+
+
+def central_key(cfg: dict) -> str:
+    if time.time() - float(_central_key.get("loaded", 0)) > _CENTRAL_KEY_TTL:
+        # Bevorzugt: Secret als App-Ressource (Umgebungsvariable), sonst direkt aus dem Scope in databricks.yml.
+        _central_key["key"] = os.environ.get("AZURE_OPENAI_KEY") or get_app_secret(BUNDLE["secret_key"],
+                                                                                    BUNDLE["secret_scope"])
+        _central_key["loaded"] = time.time()
+    return str(_central_key["key"])
 
 
 @provider("azure_central", "Azure OpenAI (Team-Key)")
 def _azure_central(cfg: dict, settings: dict, creds: dict):
-    if "key" not in _central_key:
-        # Bevorzugt: Secret als App-Ressource (Umgebungsvariable), sonst direkt aus dem Scope.
-        _central_key["key"] = os.environ.get("AZURE_OPENAI_KEY") or get_app_secret(cfg["secret_key"], cfg["secret_scope"])
-    return _azure_model(_central_key["key"], cfg["azure_endpoint"],
+    return _azure_model(central_key(cfg), cfg["azure_endpoint"],
                         settings.get("azure_api_version") or cfg["api_version"],
                         settings.get("azure_deployment") or cfg["deployment"])
 

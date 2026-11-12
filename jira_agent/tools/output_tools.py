@@ -8,11 +8,12 @@ from __future__ import annotations
 import csv
 import io
 import re
+from typing import Literal
 
 from jira_agent import CFG
 from jira_agent.data import check_readonly_sql
 from jira_agent.tools import ToolContext, tool
-from jira_agent.tools.jira_tools import search_issues
+from jira_agent.tools.jira_tools import EXPORT_MAX_RESULTS, search_issues
 
 _EXPORT_ROWS = int(CFG["data"]["export_row_limit"])
 _MAX_POINTS = 50
@@ -37,15 +38,18 @@ def _sql_result(ctx: ToolContext, sql: str) -> dict:
     return ctx.sql.query(check_readonly_sql(sql, ctx.selected_tables), row_limit=_EXPORT_ROWS)
 
 
-@tool("Erstellt ein Diagramm (PNG) aus genau einem lesenden SELECT auf freigegebenen Tabellen. "
-      "Das SELECT sollte bereits aggregiert sein (z. B. GROUP BY), max. 50 Punkte.",
-      {"sql": {"type": "string"},
-       "chart_type": {"type": "string", "enum": ["bar", "line", "pie", "scatter"]},
-       "x": {"type": "string", "description": "Spalte für Kategorien bzw. X-Achse"},
-       "y": {"type": "string", "description": "Spalte mit Zahlenwerten"},
-       "title": {"type": "string"}},
-      ["sql", "chart_type", "x", "y"], needs=["sql", "files"])
-def create_chart(ctx: ToolContext, sql: str, chart_type: str, x: str, y: str, title: str = "") -> dict:
+@tool(needs=["sql", "files"])
+def create_chart(ctx: ToolContext, sql: str, chart_type: Literal["bar", "line", "pie", "scatter"], x: str, y: str,
+                 title: str = "") -> dict:
+    """Erstellt ein Diagramm (PNG) aus genau einem lesenden SELECT auf freigegebenen Tabellen.
+    Das SELECT sollte bereits aggregiert sein (z. B. GROUP BY), max. 50 Punkte.
+
+    sql: SELECT auf freigegebenen Tabellen
+    chart_type: Diagrammtyp
+    x: Spalte für Kategorien bzw. X-Achse
+    y: Spalte mit Zahlenwerten
+    title: Überschrift
+    """
     res = _sql_result(ctx, sql)
     if "error" in res:
         return res
@@ -95,14 +99,17 @@ def create_chart(ctx: ToolContext, sql: str, chart_type: str, x: str, y: str, ti
             "gekuerzt": cut or bool(res.get("truncated"))}
 
 
-@tool("Exportiert Daten als Datei (CSV oder Excel) zum Download. source='sql': ein lesendes SELECT "
-      "auf freigegebenen Tabellen; source='jql': Jira-Tickets per JQL (max. 100).",
-      {"source": {"type": "string", "enum": ["sql", "jql"]},
-       "query": {"type": "string", "description": "SELECT bzw. JQL"},
-       "format": {"type": "string", "enum": ["csv", "xlsx"]},
-       "filename": {"type": "string"}},
-      ["source", "query", "format"], needs=["files"])
-def export_file(ctx: ToolContext, source: str, query: str, format: str, filename: str = "") -> dict:
+@tool(needs=["files"])
+def export_file(ctx: ToolContext, source: Literal["sql", "jql"], query: str, format: Literal["csv", "xlsx"],
+                filename: str = "") -> dict:
+    """Exportiert Daten als Datei (CSV oder Excel) zum Download. source='sql': ein lesendes SELECT
+    auf freigegebenen Tabellen; source='jql': Jira-Tickets per JQL (max. 100).
+
+    source: Datenquelle
+    query: SELECT bzw. JQL
+    format: Dateiformat
+    filename: Dateiname ohne Endung
+    """
     if source == "sql":
         res = _sql_result(ctx, query)
         if "error" in res:
@@ -111,9 +118,7 @@ def export_file(ctx: ToolContext, source: str, query: str, format: str, filename
     elif source == "jql":
         if ctx.jira is None:
             raise RuntimeError("Kein Jira-Token – bitte über das Zahnrad verbinden.")
-        res = search_issues(ctx.jira, query, 100)
-        if "error" in res:
-            return res
+        res = search_issues(ctx.jira, query, EXPORT_MAX_RESULTS)
         columns = ["key", "summary", "status", "priority", "components", "assignee", "updated"]
         rows = [[", ".join(i[c]) if isinstance(i.get(c), list) else i.get(c) for c in columns]
                 for i in res["issues"]]
