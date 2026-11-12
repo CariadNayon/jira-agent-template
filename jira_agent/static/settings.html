@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Einstellungen – Jira Agent</title>
+<style>
+  body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;margin:0;color:#222;font-size:14px}
+  header{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid #eee}
+  header h1{font-size:16px;margin:0}
+  .tabs{display:flex;gap:4px;padding:8px 16px 0;border-bottom:1px solid #eee}
+  .tabs button{border:0;background:none;padding:8px 12px;cursor:pointer;border-bottom:2px solid transparent;font-size:14px}
+  .tabs button.active{border-bottom-color:#1b5fd1;color:#1b5fd1;font-weight:600}
+  section{display:none;padding:16px;overflow:auto;height:calc(100vh - 175px);box-sizing:border-box}
+  section.active{display:block}
+  label{display:block;margin:12px 0 4px;font-weight:600}
+  input[type=text],input[type=password],select,textarea{width:100%;box-sizing:border-box;padding:7px 9px;border:1px solid #ccc;border-radius:6px;font:inherit}
+  textarea{min-height:240px;font-family:ui-monospace,Consolas,monospace}
+  .row{display:flex;gap:8px;align-items:center;margin-top:8px}
+  button.btn{padding:7px 14px;border-radius:6px;border:1px solid #ccc;background:#fff;cursor:pointer}
+  button.primary{background:#1b5fd1;color:#fff;border-color:#1b5fd1}
+  .hint{color:#666;font-size:12px;margin-top:4px}
+  .ok{color:#1a7f37}.err{color:#c62828}
+  ul.tables{list-style:none;padding:0;margin:8px 0}
+  ul.tables li{display:flex;justify-content:space-between;padding:4px 8px;border:1px solid #eee;border-radius:6px;margin-bottom:4px}
+  footer{display:flex;justify-content:space-between;align-items:center;padding:10px 16px;border-top:1px solid #eee}
+</style>
+</head>
+<body>
+<header><h1>Einstellungen</h1><span id="who" class="hint"></span></header>
+<nav class="tabs">
+  <button data-tab="access" class="active">Zugänge</button>
+  <button data-tab="model">Modell</button>
+  <button data-tab="data">Datenquellen</button>
+  <button data-tab="rules">Regeln</button>
+</nav>
+
+<section id="access" class="active">
+  <label for="agentName">Name des Agenten</label>
+  <input id="agentName" type="text" maxlength="40" autocomplete="off">
+  <div class="hint">Leer lassen für den Standardnamen aus Ihrem Jira-Konto. Wird mit „Speichern“ übernommen.</div>
+  <p class="hint" style="margin-top:16px">Keys gelten nur für diese Sitzung, liegen nur im Arbeitsspeicher der App und werden nie gespeichert.</p>
+  <div id="jiraStatus"></div>
+  <label for="jiraToken">Jira Personal Access Token</label>
+  <input id="jiraToken" type="password" autocomplete="off">
+  <div class="row"><button class="btn primary" id="connectJira">Mit Jira verbinden</button><span id="jiraMsg"></span></div>
+  <label for="azureKey">Eigener Azure-OpenAI-Key (optional)</label>
+  <input id="azureKey" type="password" autocomplete="off">
+  <div class="row"><button class="btn" id="setAzure">Azure-Key übernehmen</button><span id="azureMsg"></span></div>
+  <div class="row" style="margin-top:24px"><button class="btn" id="logout">Abmelden (alle Keys löschen)</button></div>
+</section>
+
+<section id="model">
+  <label>Modell</label>
+  <div id="providers"></div>
+  <label for="deployment">Deployment</label><input id="deployment" type="text">
+  <label for="apiVersion">API-Version</label><input id="apiVersion" type="text">
+  <div id="endpointBox"><label for="endpoint">Eigener Azure-Endpoint</label><input id="endpoint" type="text">
+    <div class="hint">Nur https://&lt;name&gt;.openai.azure.com oder .cognitiveservices.azure.com. Key unter Zugänge eintragen.</div></div>
+</section>
+
+<section id="data">
+  <p class="hint">Es erscheint nur, was Sie selbst sehen dürfen. Der Agent liest nur, mit Ihren Rechten.</p>
+  <label for="catalog">Katalog</label><select id="catalog"><option value="">Katalog wählen …</option></select>
+  <label for="schema">Schema</label><select id="schema" disabled><option value="">Schema wählen …</option></select>
+  <label for="tables">Tabellen (Mehrfachauswahl mit Strg/Cmd)</label><select id="tables" multiple size="6" disabled></select>
+  <div class="row"><button class="btn" id="addTables">Hinzufügen</button><span id="ucMsg"></span></div>
+  <label>Freigegebene Tabellen</label><ul class="tables" id="selected"></ul>
+</section>
+
+<section id="rules">
+  <label for="rulesText">Ihre Regeln in einfacher Sprache</label>
+  <textarea id="rulesText"></textarea>
+  <div class="row"><button class="btn" id="resetRules">Standardregeln wiederherstellen</button></div>
+</section>
+
+<footer><span id="saveMsg"></span>
+  <div class="row" style="margin:0"><button class="btn" id="close">Schließen</button><button class="btn primary" id="save">Speichern</button></div>
+</footer>
+
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var state = { settings: null, defaults: null, providers: [], selected: [] };
+
+  function notifyPage() { parent.postMessage("jira-settings-saved", location.origin); }
+  function msg(id, text, ok) { var el = $(id); el.textContent = text || ""; el.className = ok === false ? "err" : ok ? "ok" : ""; }
+  async function api(path, opts) {
+    opts = opts || {};
+    if (opts.body) opts.headers = { "Content-Type": "application/json" };
+    var r = await fetch(path, opts);
+    var data = null;
+    try { data = await r.json(); } catch (e) { data = null; }
+    if (!r.ok) throw new Error((data && data.detail) || ("HTTP " + r.status));
+    return data;
+  }
+  function option(sel, value, text) { var o = document.createElement("option"); o.value = value; o.textContent = text; sel.appendChild(o); }
+
+  document.querySelectorAll(".tabs button").forEach(function (b) {
+    b.addEventListener("click", function () {
+      document.querySelectorAll(".tabs button, section").forEach(function (x) { x.classList.remove("active"); });
+      b.classList.add("active"); $(b.dataset.tab).classList.add("active");
+      if (b.dataset.tab === "data") loadCatalogs();
+    });
+  });
+
+  function renderStatus(me) {
+    $("who").textContent = me.email;
+    $("jiraStatus").innerHTML = "";
+    var p = document.createElement("p");
+    p.className = me.jira_user ? "ok" : "hint";
+    p.textContent = me.jira_user ? ("Jira: angemeldet als " + me.jira_user) : "Jira: nicht verbunden";
+    $("jiraStatus").appendChild(p);
+    msg("azureMsg", me.has_azure_key ? "Eigener Azure-Key gesetzt" : "", true);
+  }
+
+  function renderProviders() {
+    var box = $("providers"); box.innerHTML = "";
+    state.providers.forEach(function (p) {
+      var l = document.createElement("label"); l.style.fontWeight = "normal";
+      var i = document.createElement("input"); i.type = "radio"; i.name = "provider"; i.value = p.name;
+      i.checked = state.settings.llm_provider === p.name;
+      i.addEventListener("change", toggleEndpoint);
+      l.appendChild(i); l.appendChild(document.createTextNode(" " + p.label)); box.appendChild(l);
+    });
+    toggleEndpoint();
+  }
+  function provider() { var c = document.querySelector('input[name="provider"]:checked'); return c ? c.value : state.settings.llm_provider; }
+  function toggleEndpoint() {
+    var p = state.providers.find(function (x) { return x.name === provider(); });
+    $("endpointBox").style.display = p && p.needs_own_key ? "block" : "none";
+  }
+
+  function renderSelected() {
+    var ul = $("selected"); ul.innerHTML = "";
+    if (!state.selected.length) { var e = document.createElement("li"); e.textContent = "(keine)"; ul.appendChild(e); }
+    state.selected.forEach(function (t) {
+      var li = document.createElement("li"); var s = document.createElement("span"); s.textContent = t;
+      var b = document.createElement("button"); b.className = "btn"; b.textContent = "Entfernen";
+      b.addEventListener("click", function () { state.selected = state.selected.filter(function (x) { return x !== t; }); renderSelected(); });
+      li.appendChild(s); li.appendChild(b); ul.appendChild(li);
+    });
+  }
+
+  var catalogsLoaded = false;
+  async function loadCatalogs() {
+    if (catalogsLoaded) return;
+    try {
+      var cats = await api("/jira/api/uc/catalogs");
+      cats.forEach(function (c) { option($("catalog"), c, c); });
+      catalogsLoaded = true;
+    } catch (e) { msg("ucMsg", "Unity Catalog nicht lesbar: " + e.message, false); }
+  }
+  $("catalog").addEventListener("change", async function () {
+    var s = $("schema"); s.innerHTML = ""; option(s, "", "Schema wählen …"); s.disabled = true;
+    $("tables").innerHTML = ""; $("tables").disabled = true;
+    if (!this.value) return;
+    try { (await api("/jira/api/uc/schemas?catalog=" + encodeURIComponent(this.value))).forEach(function (x) { option(s, x, x); }); s.disabled = false; }
+    catch (e) { msg("ucMsg", e.message, false); }
+  });
+  $("schema").addEventListener("change", async function () {
+    var t = $("tables"); t.innerHTML = ""; t.disabled = true;
+    if (!this.value) return;
+    try {
+      (await api("/jira/api/uc/tables?catalog=" + encodeURIComponent($("catalog").value) + "&schema=" + encodeURIComponent(this.value)))
+        .forEach(function (x) { option(t, x, x); });
+      t.disabled = false;
+    } catch (e) { msg("ucMsg", e.message, false); }
+  });
+  $("addTables").addEventListener("click", function () {
+    var c = $("catalog").value, s = $("schema").value;
+    Array.from($("tables").selectedOptions).forEach(function (o) {
+      var full = c + "." + s + "." + o.value;
+      if (state.selected.indexOf(full) < 0) state.selected.push(full);
+    });
+    state.selected.sort(); renderSelected(); msg("ucMsg", "Hinzugefügt – zum Übernehmen Speichern klicken.", true);
+  });
+
+  $("connectJira").addEventListener("click", async function () {
+    var token = $("jiraToken").value.trim();
+    if (!token) return msg("jiraMsg", "Bitte Token eintragen.", false);
+    msg("jiraMsg", "Prüfe …");
+    try { var r = await api("/jira/api/credentials", { method: "POST", body: JSON.stringify({ jira_token: token }) });
+      $("jiraToken").value = ""; msg("jiraMsg", "Angemeldet als " + r.jira_user, true); await load(); notifyPage(); }
+    catch (e) { msg("jiraMsg", e.message, false); }
+  });
+  $("setAzure").addEventListener("click", async function () {
+    var key = $("azureKey").value.trim();
+    if (!key) return msg("azureMsg", "Bitte Key eintragen.", false);
+    try { await api("/jira/api/credentials", { method: "POST", body: JSON.stringify({ azure_key: key }) });
+      $("azureKey").value = ""; msg("azureMsg", "Eigener Azure-Key für diese Sitzung gesetzt.", true); }
+    catch (e) { msg("azureMsg", e.message, false); }
+  });
+  $("logout").addEventListener("click", async function () {
+    try { await api("/jira/api/credentials", { method: "DELETE" }); msg("jiraMsg", "Abgemeldet, alle Keys gelöscht.", true); await load(); notifyPage(); }
+    catch (e) { msg("jiraMsg", e.message, false); }
+  });
+  $("resetRules").addEventListener("click", function () { $("rulesText").value = state.defaults.rules; });
+
+  $("save").addEventListener("click", async function () {
+    var body = {
+      agent_name: $("agentName").value.trim(),
+      rules: $("rulesText").value, selected_tables: state.selected, llm_provider: provider(),
+      azure_deployment: $("deployment").value.trim(), azure_api_version: $("apiVersion").value.trim(),
+      azure_endpoint: $("endpoint").value.trim()
+    };
+    msg("saveMsg", "Speichere …");
+    try { var r = await api("/jira/api/settings", { method: "POST", body: JSON.stringify(body) });
+      state.settings = r.settings;
+      notifyPage();
+      msg("saveMsg", r.saved ? "Gespeichert. Gilt ab der nächsten Nachricht." : (r.warning || "Übernommen (nur für diese Sitzung)."), true); }
+    catch (e) { msg("saveMsg", e.message, false); }
+  });
+  $("close").addEventListener("click", function () { parent.postMessage("jira-settings-close", location.origin); });
+
+  async function load() {
+    try {
+      var me = await api("/jira/api/me");
+      state.settings = me.settings; state.defaults = me.defaults; state.providers = me.providers;
+      state.selected = (me.settings.selected_tables || []).slice();
+      renderStatus(me); renderProviders(); renderSelected();
+      $("deployment").value = me.settings.azure_deployment || me.defaults.azure_deployment;
+      $("apiVersion").value = me.settings.azure_api_version || me.defaults.azure_api_version;
+      $("endpoint").value = me.settings.azure_endpoint || me.defaults.azure_endpoint;
+      $("rulesText").value = me.settings.rules || "";
+      $("agentName").value = me.settings.agent_name || "";
+      $("agentName").placeholder = me.agent_name_default;
+    } catch (e) { msg("saveMsg", "Einstellungen nicht ladbar: " + e.message, false); }
+  }
+  load();
+})();
+</script>
+</body>
+</html>

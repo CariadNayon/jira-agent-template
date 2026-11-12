@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Anleitung – Jira Agent erweitern</title>
+<style>
+  body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;margin:0;color:#222;font-size:14px;line-height:1.5}
+  header{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid #eee;position:sticky;top:0;background:#fff}
+  header h1{font-size:16px;margin:0}
+  main{padding:8px 20px 24px;max-width:820px}
+  h2{font-size:15px;margin:22px 0 6px}
+  code{background:#f4f4f4;padding:1px 4px;border-radius:4px;font-size:13px}
+  pre{background:#f6f8fa;border:1px solid #e5e5e5;border-radius:6px;padding:10px 12px;overflow:auto;font-size:12.5px;line-height:1.45}
+  pre code{background:none;padding:0}
+  ul{padding-left:20px}
+  .hint{color:#666;font-size:12px}
+  button.btn{padding:6px 12px;border-radius:6px;border:1px solid #ccc;background:#fff;cursor:pointer}
+  nav a{margin-right:10px;font-size:13px}
+</style>
+</head>
+<body>
+<header><h1>Anleitung: Jira Agent anpassen und erweitern</h1><button class="btn" id="close">Schließen</button></header>
+<main>
+<nav><a href="#ohne-code">Ohne Code</a><a href="#tool">Eigenes Tool</a><a href="#modell">Modell</a><a href="#config">Standardwerte</a><a href="#kopie">Eigene Kopie</a><a href="#sicherheit">Sicherheit</a></nav>
+
+<h2 id="ohne-code">1. Ohne Code: Name, Regeln, Daten</h2>
+<ul>
+  <li>Zahnrad oben rechts → <b>Zugänge</b>: Name des Agenten, Jira-Token (nur für diese Sitzung), optional eigener Azure-Key.</li>
+  <li><b>Regeln</b>: in einfacher Sprache, z. B. „Tickets zu Bremsen ohne Bearbeiter gehen an chassis.lead“.</li>
+  <li><b>Datenquellen</b>: Tabellen freigeben, die der Agent lesen darf (nur mit Ihren eigenen Rechten).</li>
+  <li>Mit <b>Speichern</b> übernehmen – gilt ab der nächsten Nachricht.</li>
+</ul>
+
+<h2 id="tool">2. Eigenes Tool hinzufügen</h2>
+<p>Neue Datei in <code>jira_agent/tools/</code> anlegen, z. B. <code>mein_tool.py</code>. Sie wird automatisch geladen. Vorlage: <code>jira_agent/tools/example_custom_tool.py</code>.</p>
+<pre><code>from jira_agent.jira_client import JiraClient
+from jira_agent.tools import ToolContext, tool
+
+
+@tool("Setzt ein Label an einem Jira-Ticket, z. B. 'auto-routed'.",   # Beschreibung für das Modell
+      {"issue_key": {"type": "string"}, "label": {"type": "string"}},  # Parameter (JSON-Schema)
+      ["issue_key", "label"],                                           # Pflichtfelder
+      write=True,                                                      # ändert etwas -> Bestätigung nötig
+      needs=["jira"])                                                  # nur sichtbar mit Jira-Token
+def jira_add_label(ctx: ToolContext, issue_key: str, label: str) -> dict:
+    key = JiraClient.check_key(issue_key)
+    r = ctx.jira.request("PUT", f"/issue/{key}", json={"update": {"labels": [{"add": label}]}})
+    return {"status": "OK"} if r.status_code == 204 else {"error": r.status_code}</code></pre>
+<ul>
+  <li><b>Erstes Argument ist immer <code>ctx</code></b>:
+    <code>ctx.jira</code> (Jira-Client mit dem Token des Nutzers),
+    <code>ctx.sql</code> (lesendes SQL mit Nutzerrechten: <code>ctx.sql.query(...)</code>, <code>ctx.sql.describe(...)</code>),
+    <code>ctx.files</code> (Datei zum Download ablegen: <code>ctx.files.put(name, mime, bytes)</code> liefert eine URL),
+    <code>ctx.selected_tables</code> (freigegebene Tabellen).</li>
+  <li><b><code>needs</code></b>: <code>"jira"</code>, <code>"sql"</code> oder <code>"files"</code> – das Tool ist nur sichtbar, wenn das vorhanden ist.</li>
+  <li><b><code>write=True</code></b> für alles, was etwas verändert: Der Agent muss dann vorher „ja &lt;CODE&gt;“ einholen. Das ist im Code erzwungen, Sie müssen nichts weiter tun.</li>
+  <li><b>Rückgabe</b>: ein <code>dict</code>. Fehler einfach als Exception werfen – der Agent bekommt sie als Text.</li>
+  <li>Bilder oder Downloads: im Ergebnis ein Feld <code>"markdown"</code> zurückgeben, z. B. <code>f"![Titel]({url})"</code> – siehe <code>output_tools.py</code>.</li>
+</ul>
+
+<h2 id="modell">3. Weiteres Modell anbinden</h2>
+<p>In <code>jira_agent/llm.py</code> einen Provider mit <code>@provider</code> ergänzen. Er erscheint danach automatisch im Zahnrad unter <b>Modell</b>.</p>
+<pre><code>@provider("mein_modell", "Mein Modell (Anzeige im Zahnrad)", needs_own_key=False)
+def _mein_modell(cfg: dict, settings: dict, creds: dict):
+    # cfg = Abschnitt llm aus config.yaml, settings = Einstellungen des Nutzers,
+    # creds = Keys dieser Sitzung (z. B. creds.get("azure_key"))
+    return _azure_model(api_key, endpoint, api_version, deployment)   # Modell für Agent(model=...)</code></pre>
+
+<h2 id="config">4. Standardwerte ändern</h2>
+<p><code>jira_agent/config.yaml</code>: Jira-URL, Azure-Endpoint und Deployment, Warehouse, Zeilenlimits, Standardregeln, Ablaufzeiten für Keys und Dateien. Nutzer überschreiben Regeln, Name, Modell und Tabellen persönlich im Zahnrad.</p>
+
+<h2 id="kopie">5. Eigene Kopie der App</h2>
+<ol>
+  <li>Den Quellordner der App (mit <code>agent_server/</code>, <code>jira_agent/</code>, <code>app.yaml</code>, <code>pyproject.toml</code>) kopieren.</li>
+  <li><b>Compute → Apps → Create app</b>, Quellordner wählen.</li>
+  <li>App-Ressourcen mit genau diesen Namen hinzufügen:
+    <ul>
+      <li><code>secret</code> – Secret <code>defmgtai-eu-we-dev-adb-local-secret-scope</code> / <code>gpt-4-api-key</code>, Can read</li>
+      <li><code>sql-warehouse</code> – SQL Warehouse, Can use</li>
+      <li><code>experiment</code> – MLflow-Experiment für Traces, Can edit</li>
+    </ul></li>
+  <li><b>User authorization</b> – Scopes: <code>sql:restricted-query</code>, <code>catalog.catalogs:read</code>, <code>catalog.schemas:read</code>, <code>catalog.tables:read</code>, <code>workspace.workspace</code>.</li>
+  <li><b>Deploy</b> – nach jeder Code-Änderung erneut deployen und die Seite mit Strg+Shift+R neu laden.</li>
+</ol>
+<p class="hint">Die App mit einer Instanz betreiben: Keys liegen nur im Arbeitsspeicher und gehen bei Neustart oder Deploy verloren.</p>
+
+<h2 id="sicherheit">6. Sicherheitsregeln</h2>
+<ul>
+  <li>Keine Keys oder Tokens in Code, Logs, Tool-Ergebnissen oder <code>settings.json</code>.</li>
+  <li>Alles, was in Jira oder anderen Systemen etwas ändert, mit <code>write=True</code> markieren.</li>
+  <li>SQL nur über <code>ctx.sql</code> und <code>check_readonly_sql</code> (nur SELECT, nur freigegebene Tabellen).</li>
+  <li>Eingaben prüfen, z. B. <code>JiraClient.check_key()</code> für Ticket-Keys.</li>
+</ul>
+</main>
+<script>
+  document.getElementById("close").addEventListener("click", function () {
+    parent.postMessage("jira-settings-close", location.origin);
+  });
+</script>
+</body>
+</html>

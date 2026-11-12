@@ -1,0 +1,146 @@
+"""Diagramme und Datei-Exporte. Ergebnisse liegen nur im Speicher des Nutzers und laufen ab.
+
+Die Daten holt das Tool selbst (SELECT bzw. JQL) – das Modell kann keine Zahlen erfinden.
+Rückgabe enthält "markdown" (Bild bzw. Download-Link), das der Agent unverändert ausgibt.
+"""
+from __future__ import annotations
+
+import csv
+import io
+import re
+
+from jira_agent import CFG
+from jira_agent.data import check_readonly_sql
+from jira_agent.tools import ToolContext, tool
+from jira_agent.tools.jira_tools import search_issues
+
+_EXPORT_ROWS = int(CFG["data"]["export_row_limit"])
+_MAX_POINTS = 50
+_NAME_RE = re.compile(r"[^A-Za-z0-9_\-]+")
+
+
+def _safe_name(name: str, ext: str) -> str:
+    base = _NAME_RE.sub("_", name or "").strip("_")[:60] or "export"
+    return f"{base}.{ext}"
+
+
+def _num(value):
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _sql_result(ctx: ToolContext, sql: str) -> dict:
+    if ctx.sql is None:
+        raise RuntimeError("Keine Tabellen freigegeben – bitte über das Zahnrad unter Datenquellen auswählen.")
+    return ctx.sql.query(check_readonly_sql(sql, ctx.selected_tables), row_limit=_EXPORT_ROWS)
+
+
+@tool("Erstellt ein Diagramm (PNG) aus genau einem lesenden SELECT auf freigegebenen Tabellen. "
+      "Das SELECT sollte bereits aggregiert sein (z. B. GROUP BY), max. 50 Punkte.",
+      {"sql": {"type": "string"},
+       "chart_type": {"type": "string", "enum": ["bar", "line", "pie", "scatter"]},
+       "x": {"type": "string", "description": "Spalte für Kategorien bzw. X-Achse"},
+       "y": {"type": "string", "description": "Spalte mit Zahlenwerten"},
+       "title": {"type": "string"}},
+      ["sql", "chart_type", "x", "y"], needs=["sql", "files"])
+def create_chart(ctx: ToolContext, sql: str, chart_type: str, x: str, y: str, title: str = "") -> dict:
+    res = _sql_result(ctx, sql)
+    if "error" in res:
+        return res
+    cols = res["columns"]
+    if x not in cols or y not in cols:
+        raise ValueError(f"Spalten {x!r}/{y!r} nicht im Ergebnis. Vorhanden: {cols}")
+    xi, yi = cols.index(x), cols.index(y)
+    points = [(row[xi], _num(row[yi])) for row in res["rows"] if _num(row[yi]) is not None]
+    if not points:
+        raise ValueError(f"Spalte {y!r} enthält keine Zahlen.")
+    cut = len(points) > _MAX_POINTS
+    points = points[:_MAX_POINTS]
+
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    labels, values = [str(p[0]) for p in points], [p[1] for p in points]
+    fig, ax = plt.subplots(figsize=(8, 4.5), dpi=120)
+    if chart_type == "bar":
+        ax.bar(labels, values)
+    elif chart_type == "line":
+        ax.plot(labels, values, marker="o")
+    elif chart_type == "scatter":
+        xs = [_num(p[0]) for p in points]
+        if any(v is None for v in xs):
+            plt.close(fig)
+            raise ValueError(f"Für scatter muss {x!r} numerisch sein.")
+        ax.scatter(xs, values)
+    elif chart_type == "pie":
+        ax.pie(values, labels=labels, autopct="%1.0f%%")
+    else:
+        plt.close(fig)
+        raise ValueError("chart_type muss bar, line, pie oder scatter sein.")
+    ax.set_title(title or f"{y} nach {x}")
+    if chart_type != "pie":
+        ax.set_xlabel(x)
+        ax.set_ylabel(y)
+        if chart_type in ("bar", "line"):
+            plt.setp(ax.get_xticklabels(), rotation=45, ha="right")
+    fig.tight_layout()
+    buf = io.BytesIO()
+    fig.savefig(buf, format="png")
+    plt.close(fig)
+    url = ctx.files.put(_safe_name(title or "diagramm", "png"), "image/png", buf.getvalue())
+    return {"markdown": f"![{title or 'Diagramm'}]({url})", "punkte": len(points),
+            "gekuerzt": cut or bool(res.get("truncated"))}
+
+
+@tool("Exportiert Daten als Datei (CSV oder Excel) zum Download. source='sql': ein lesendes SELECT "
+      "auf freigegebenen Tabellen; source='jql': Jira-Tickets per JQL (max. 100).",
+      {"source": {"type": "string", "enum": ["sql", "jql"]},
+       "query": {"type": "string", "description": "SELECT bzw. JQL"},
+       "format": {"type": "string", "enum": ["csv", "xlsx"]},
+       "filename": {"type": "string"}},
+      ["source", "query", "format"], needs=["files"])
+def export_file(ctx: ToolContext, source: str, query: str, format: str, filename: str = "") -> dict:
+    if source == "sql":
+        res = _sql_result(ctx, query)
+        if "error" in res:
+            return res
+        columns, rows = res["columns"], res["rows"]
+    elif source == "jql":
+        if ctx.jira is None:
+            raise RuntimeError("Kein Jira-Token – bitte über das Zahnrad verbinden.")
+        res = search_issues(ctx.jira, query, 100)
+        if "error" in res:
+            return res
+        columns = ["key", "summary", "status", "priority", "components", "assignee", "updated"]
+        rows = [[", ".join(i[c]) if isinstance(i.get(c), list) else i.get(c) for c in columns]
+                for i in res["issues"]]
+    else:
+        raise ValueError("source muss sql oder jql sein.")
+
+    if format == "csv":
+        text = io.StringIO()
+        writer = csv.writer(text, delimiter=";")   # Semikolon: öffnet sich in deutschem Excel korrekt
+        writer.writerow(columns)
+        writer.writerows(rows)
+        data, mime = text.getvalue().encode("utf-8-sig"), "text/csv"
+    elif format == "xlsx":
+        from openpyxl import Workbook
+
+        wb = Workbook()
+        ws = wb.active
+        ws.append(columns)
+        for row in rows:
+            ws.append(["" if v is None else v for v in row])
+        buf = io.BytesIO()
+        wb.save(buf)
+        data = buf.getvalue()
+        mime = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    else:
+        raise ValueError("format muss csv oder xlsx sein.")
+
+    name = _safe_name(filename or f"export_{source}", format)
+    url = ctx.files.put(name, mime, data)
+    return {"markdown": f"[{name} herunterladen]({url})", "zeilen": len(rows)}

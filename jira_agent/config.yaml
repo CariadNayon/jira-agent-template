@@ -1,0 +1,31 @@
+# Zentrale Standardwerte. Nutzer ändern Regeln, Modell und Tabellen persönlich über das Zahnrad.
+
+jira:
+  base_url: https://devstack.vwgroup.com/jira/rest/api/2
+
+llm:
+  provider: azure_central                 # azure_central | azure_own (siehe jira_agent/llm.py)
+  azure_endpoint: https://inc43errormana0783142845.cognitiveservices.azure.com/
+  api_version: 2024-12-01-preview
+  deployment: gpt-4o-2
+  # Zentraler Team-Key: als App-Ressource "secret" (Umgebungsvariable AZURE_OPENAI_KEY),
+  # sonst direkt aus diesem Secret Scope (Service Principal der App braucht READ).
+  secret_scope: defmgtai-eu-we-dev-adb-local-secret-scope
+  secret_key: gpt-4-api-key
+
+data:
+  warehouse_id: 822757479507240e         # wird durch die App-Ressource WAREHOUSE_ID überschrieben
+  row_limit: 200                         # Zeilen pro Abfrage im Chat
+  export_row_limit: 5000                 # Zeilen pro Export / Diagramm
+
+agent:
+  max_turns: 12
+  default_rules: |
+    - Tickets zu Bremsen ohne Bearbeiter werden an chassis.lead weitergeleitet.
+    - Tickets zu Laden, Batterie oder Ladesäule werden an energy.lead weitergeleitet.
+    - Tickets mit Absturz oder Neustart eines Steuergeräts bekommen den Kommentar
+      "Kritisch – bitte priorisieren".
+
+session:
+  credentials_ttl_hours: 8               # Keys verfallen spätestens danach (nur im Speicher)
+  files_ttl_minutes: 60                  # erzeugte Diagramme/Exporte
