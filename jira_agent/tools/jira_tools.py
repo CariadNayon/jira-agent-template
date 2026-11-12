@@ -64,7 +64,7 @@ def jira_assign(ctx: ToolContext, issue_key: str, user_name: str) -> dict:
     """Leitet ein Ticket an einen Nutzer weiter (Bearbeiter setzen).
 
     issue_key: Ticket-Key, z. B. ABC-123
-    user_name: Jira-Kennung des neuen Bearbeiters (siehe jira_find_user)
+    user_name: Jira-Kennung des neuen Bearbeiters (siehe jira_find_user) oder @me für den Jira-Benutzer
     """
     ctx.jira.assign(issue_key, user_name)
     return {"status": "OK"}

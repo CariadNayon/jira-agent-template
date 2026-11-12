@@ -38,6 +38,7 @@ class ToolContext:
     sql: Any = None                  # SqlRunner mit Nutzerrechten (oder None)
     files: Any = None                # FileSink des Nutzers für Diagramme/Exporte (oder None)
     uploads: Any = None              # UploadSink mit hochgeladenen Dateien (oder None, wenn keine)
+    enabled_tools: list[str] | None = None  # None = alle registrierten Tools; Liste = explizite Auswahl
     selected_tables: list[str] = field(default_factory=list)
 
     def __repr__(self) -> str:      # keine Clients/Keys in Traces

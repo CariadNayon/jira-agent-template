@@ -13,6 +13,7 @@ import functools
 import hashlib
 import hmac
 import json
+import re
 
 from jira_agent.tools import REGISTRY, Tool, ToolContext, json_schema, load_tools
 
@@ -39,7 +40,15 @@ class RunContext:
 
 def available_tools(tool_ctx: ToolContext) -> list[Tool]:
     load_tools()
-    return [t for t in REGISTRY.values() if all(getattr(tool_ctx, n, None) for n in t.needs)]
+    selected = tool_ctx.enabled_tools
+    if selected is not None:
+        if not isinstance(selected, list) or any(not isinstance(name, str) for name in selected):
+            raise ValueError("agent.enabled_tools muss null oder eine Liste von Tool-Namen sein.")
+        unknown = set(selected) - REGISTRY.keys()
+        if unknown:
+            raise ValueError(f"Unbekannte Tools in agent.enabled_tools: {sorted(unknown)}")
+    return [t for t in REGISTRY.values() if (selected is None or t.name in selected)
+            and all(getattr(tool_ctx, n, None) for n in t.needs)]
 
 
 def execute(t: Tool, rc: RunContext, args: dict) -> dict:
@@ -48,7 +57,7 @@ def execute(t: Tool, rc: RunContext, args: dict) -> dict:
         if t.write:
             given = str(args.pop("confirmation_code", "") or "").upper()
             code = rc.code_for(t.name, args)
-            if given != code or code not in rc.last_user_text.upper():
+            if given != code or not re.fullmatch(r"\s*ja\s+" + re.escape(code) + r"\s*[.!]?\s*", rc.last_user_text, re.I):
                 return {"status": "BESTAETIGUNG_NOETIG", "tool": t.name, "argumente": args, "code": code,
                         "hinweis": f"Zeige dem Nutzer genau diese Aktion und bitte um die Antwort 'ja {code}'."}
         return t.func(rc.tool_ctx, **args)
@@ -65,7 +74,14 @@ async def _on_invoke(t: Tool, ctx, arguments: str) -> str:
         result = {"error": type(e).__name__, "details": str(e)[:200]}
     else:
         result = await asyncio.to_thread(execute, t, ctx.context, args)   # Tools sind blockierend
-    return json.dumps(result, ensure_ascii=False, default=str)[:_MAX_OUTPUT]
+    encoded = json.dumps(result, ensure_ascii=False, default=str)
+    if len(encoded) > _MAX_OUTPUT:
+        # Never cut JSON midway through a string/list. Metadata tools support field/value filters.
+        encoded = json.dumps({"status": "RESULT_TOO_LARGE", "truncated": True,
+                              "hint": "Ergebnis eingrenzen (field_id, value_query, max_results) und erneut lesen. "
+                                      "Eine ausgeführte Schreibaktion nicht wiederholen.",
+                              "preview": encoded[:12000]}, ensure_ascii=False)
+    return encoded
 
 
 def build_function_tools(tool_ctx: ToolContext) -> list:

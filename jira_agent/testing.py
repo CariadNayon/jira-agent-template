@@ -43,11 +43,21 @@ class FakeJira(JiraClient):
     """
 
     def __init__(self, issues: dict | None = None, users: list[dict] | None = None,
-                 transitions: list[dict] | None = None):
+                 transitions: list[dict] | None = None, create_fields: list[dict] | None = None,
+                 issue_types: list[dict] | None = None):
         super().__init__("https://jira.example/rest/api/2", "fake-token")
         self.issues = {k: {"summary": "", "status": "Offen", "labels": [], "comments": [], "links": [],
                            "worklogs": [], **v} for k, v in (issues or {}).items()}
         self.users = users or [{"name": "max.muster", "displayName": "Muster, Max"}]
+        self.issue_types = issue_types or [{"id": "10001", "name": "Task", "subtask": False}]
+        self.creation_fields = create_fields if create_fields is not None else [
+            {"fieldId": "summary", "name": "Summary", "required": True, "schema": {"type": "string"}},
+            {"fieldId": "description", "name": "Description", "required": False, "schema": {"type": "string"}},
+            {"fieldId": "priority", "name": "Priority", "required": False,
+             "allowedValues": [{"id": "1", "name": "High"}, {"id": "2", "name": "Low"}]},
+            {"fieldId": "labels", "name": "Labels", "required": False},
+            {"fieldId": "customfield_10010", "name": "Team", "required": False},
+        ]
         self.transition_options = transitions or _DEFAULT_TRANSITIONS
         self.calls: list[tuple] = []
 
@@ -60,6 +70,18 @@ class FakeJira(JiraClient):
             return FakeResponse(404, {"errorMessages": ["Issue Does Not Exist"]})
         issue = self.issues.get(key) if key else None
 
+        if path.startswith("/issue/createmeta/"):
+            rows = self.creation_fields if path.rsplit("/", 1)[-1].isdigit() else self.issue_types
+            params = kwargs["params"]
+            start, size = params["startAt"], params["maxResults"]
+            return FakeResponse(200, {"values": rows[start:start + size], "isLast": start + size >= len(rows)})
+        if path == "/priority":
+            return FakeResponse(200, [{"id": "1", "name": "High"}, {"id": "2", "name": "Low"}])
+        if path == "/issueLinkType":
+            return FakeResponse(200, {"issueLinkTypes": [
+                {"id": "1", "name": "Blocks", "outward": "blocks", "inward": "is blocked by"}]})
+        if sub == "/editmeta" and method == "GET":
+            return FakeResponse(200, {"fields": {f["fieldId"]: f for f in self.creation_fields}})
         if path == "/myself":
             return FakeResponse(200, self.users[0])
         if path == "/search":
@@ -74,10 +96,14 @@ class FakeJira(JiraClient):
             return FakeResponse(200, [{"id": "summary", "name": "Summary"}])
         if path == "/issue" and method == "POST":
             project = body["fields"]["project"]["key"]
-            new_key = f"{project}-{len(self.issues) + 1}"
+            number = max([int(k.split("-")[-1]) for k in self.issues if k.startswith(project + "-")] or [0]) + 1
+            new_key = f"{project}-{number}"
             fields = {k: v for k, v in body["fields"].items() if k not in ("project",)}
             self.issues[new_key] = {"summary": fields.get("summary", ""), "status": "Offen", "labels": [],
-                                    "comments": [], "links": [], "worklogs": [], "fields": fields}
+                                    "comments": [], "links": [], "worklogs": [], "fields": fields,
+                                    **{k: (v["name"] if isinstance(v, dict) and "name" in v else v)
+                                       for k, v in fields.items() if k != "components"},
+                                    "components": [c["name"] for c in fields.get("components", [])]}
             return FakeResponse(201, {"key": new_key})
         if path == "/issueLink" and method == "POST":
             self.issues[body["outwardIssue"]["key"]]["links"].append((body["type"]["name"], body["inwardIssue"]["key"]))
@@ -99,9 +125,9 @@ class FakeJira(JiraClient):
                 return FakeResponse(201, {})
             if sub == "/comment":
                 return FakeResponse(200, {"comments": [{"author": {"displayName": "Test"}, "body": c}
-                                                       for c in issue["comments"]]})
+                                                       for c in issue["comments"][:kwargs["params"]["maxResults"]]]})
             if sub == "/transitions" and method == "GET":
-                return FakeResponse(200, {"transitions": [{"id": t["id"], "name": t["name"], "to": {"name": t["to"]}}
+                return FakeResponse(200, {"transitions": [{"id": t["id"], "name": t["name"], "to": {"name": t["to"]}, "fields": t.get("fields", {})}
                                                           for t in self.transition_options]})
             if sub == "/transitions":
                 target = next(t for t in self.transition_options if t["id"] == body["transition"]["id"])

@@ -578,7 +578,7 @@ workspace.workspace</pre>
 </li>
 <li>
 <h3>Eine Änderung beschreiben</h3>
-<div class="prompt"><pre>Baue ein Tool, das den Status eines Jira-Tickets ändert. Beispiel: ABC-123 auf „In Arbeit“. Lies .claude/skills/neues-tool/SKILL.md. Verwende die vorhandenen Jira-Helfer und write=True. Ergänze Tests ohne echtes Jira und führe sie aus.</pre>
+<div class="prompt"><pre>Lies AGENTS.md und docs/EXTENDING.md. Prüfe zunächst die vorhandenen Tools. Ergänze nur die fehlenden Fähigkeiten für unseren projektspezifischen Jira-Ablauf. Lies dafür .claude/skills/neues-tool/SKILL.md. Verwende vorhandene Clients und write=True für Änderungen. Schreibe Tests ohne echtes Jira und führe sie aus.</pre>
 <button class="btn" data-copy>Kopieren</button>
 </div>
 <p class="result"><b>Ergebnis:</b> Du erhältst eine überschaubare Änderung und Testergebnisse.</p>
@@ -597,7 +597,7 @@ workspace.workspace</pre>
 </ol>
 <details>
 <summary>Was lässt sich ohne Code ändern?</summary>
-<p>Über das Zahnrad kannst du Name, Modell, Regeln, freigegebene Tabellen und persönliche Skills ändern. Neue Aktionen brauchen ein Tool in <code>jira_agent/tools/</code>. Eine gespeicherte Anleitung für bestehende Aktionen braucht einen Skill.</p>
+<p>Über das Zahnrad kannst du Name, Modell, Regeln, freigegebene Tabellen und persönliche Skills ändern. Ticket-Erstellung, Feldänderungen, Statuswechsel, Prioritäten, Verknüpfungen und Arbeitszeit sind bereits als Jira-Tools enthalten. Weitere Aktionen brauchen ein Tool in <code>jira_agent/tools/</code>. Eine gespeicherte Anleitung für bestehende Aktionen braucht einen Skill.</p>
 </details>
 <details>
 <summary>Wo wird entwickelt?</summary>
@@ -842,6 +842,7 @@ beschreibung: Prüft ein Ticket auf fehlende Angaben
 <section class="part" id="nutzen" hidden>
 <p>Jira noch nicht verbunden? <a href="#jira-token">Zum Erstellen und Einfügen des Tokens</a>.</p>
 <h2 id="fragen">2. Was kann ich fragen?</h2>
+<p>Der Agent kann jetzt auch Tickets erstellen und bearbeiten, Status und Priorität ändern, Tickets verknüpfen und Arbeitszeit buchen. Beispiel: „Erstelle ein Testticket im Projekt ABC und weise es mir zu.“ Er klärt Pflichtfelder und fragt vor jeder Änderung nach Bestätigung. Mit <code>/ticket-entwurf</code> kannst du den Erstellungsablauf wiederverwenden.</p>
 <table>
   <tr>
 <th>Thema</th>

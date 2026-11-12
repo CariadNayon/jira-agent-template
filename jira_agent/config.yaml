@@ -17,11 +17,11 @@ data:
 
 agent:
   max_turns: 12
+  enabled_tools: null                   # null = alle; alternativ Liste registrierter Tool-Namen
   default_rules: |
-    - Tickets zu Bremsen ohne Bearbeiter werden an chassis.lead weitergeleitet.
-    - Tickets zu Laden, Batterie oder Ladesäule werden an energy.lead weitergeleitet.
-    - Tickets mit Absturz oder Neustart eines Steuergeräts bekommen den Kommentar
-      "Kritisch – bitte priorisieren".
+    - Frage nach, wenn Projekt oder notwendige Angaben fehlen.
+    - Verwende die tatsächlichen Namen, Werte und Rechte aus Jira.
+    - Schlage Änderungen nachvollziehbar vor und führe sie erst nach Bestätigung aus.
 
 session:
   credentials_ttl_hours: 8               # Keys verfallen spätestens so lange nach Sitzungsbeginn (nur im Speicher)

@@ -24,6 +24,8 @@ Regeln, Name, Modell und Tabellen ändern Nutzer **ohne Code** über das Zahnrad
 
 **Hier wird erweitert:**
 
+Architektur, Tool-Auswahl und Wiederverwendung: `docs/EXTENDING.md`. Standard-Jira-Aktionen sind bereits registriert; vor einer Erweiterung erst `load_tools()` prüfen, keine doppelten Tool-Namen anlegen.
+
 | Datei / Ordner | Inhalt |
 |---|---|
 | `jira_agent/config.yaml` | Jira-URL, Azure-Endpoint/Deployment, Limits, Standardregeln |
