@@ -7,7 +7,9 @@ nicht über /invocations bzw. /responses – und tauchen dadurch nie in Traces a
 from __future__ import annotations
 
 import asyncio
+import re
 from pathlib import Path
+from urllib.parse import quote
 
 from fastapi import APIRouter, FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, Response
@@ -16,13 +18,18 @@ from pydantic import BaseModel
 from jira_agent import CFG
 from jira_agent.jira_client import JiraClient, JiraError
 from jira_agent.llm import PROVIDERS, check_azure_endpoint
-from jira_agent.runtime import DEFAULT_SETTINGS, agent_name, default_agent_name, identity, load_settings, user_client
+from jira_agent.runtime import (DEFAULT_SETTINGS, agent_name, all_skills, default_agent_name, identity,
+                                load_personal_skills, load_settings, user_client)
 from jira_agent.settings_store import SettingsStore, sanitize
-from jira_agent.state import get_file, logout, user_state
+from jira_agent.skills import MAX_PERSONAL, PersonalSkillStore, check_skill, render_skill, team_skills
+from jira_agent.state import UploadSink, get_file, logout, user_state
 
 _STATIC = Path(__file__).parent / "static"
 _UI_TAG = b'<script src="/jira/static/ui.js" defer></script>'
 _CSP = "img-src 'self' data: blob:"
+_IMG_RE = re.compile(r"[a-z0-9_\-]+\.png")
+_UPLOAD_NAME_RE = re.compile(r"[^\w.\- ()äöüÄÖÜß]+")
+_MAX_UPLOAD = 20 * 1024 * 1024
 
 router = APIRouter(prefix="/jira")
 
@@ -163,6 +170,104 @@ async def download(fid: str, request: Request):
         "Content-Disposition": f'{disposition}; filename="{f.name}"', "Cache-Control": "private, no-store"})
 
 
+# ---------------------------------------------------------------- Uploads (nur Speicher, nur für den Besitzer)
+@router.post("/api/upload")
+async def upload(name: str, request: Request):
+    """Rohdaten im Body, Dateiname als Query-Parameter (ohne multipart, keine Zusatzpakete nötig)."""
+    email, _ = _who(request)
+    if int(request.headers.get("content-length") or 0) > _MAX_UPLOAD:
+        raise HTTPException(413, "Datei ist zu groß (max. 20 MB).")
+    data = await request.body()
+    if not data:
+        raise HTTPException(400, "Leere Datei.")
+    if len(data) > _MAX_UPLOAD:
+        raise HTTPException(413, "Datei ist zu groß (max. 20 MB).")
+    clean = _UPLOAD_NAME_RE.sub("_", Path(name).name).strip()[:100] or "datei"
+    mime = (request.headers.get("content-type") or "application/octet-stream").split(";")[0]
+    fid = UploadSink(email).put(clean, mime, data)
+    return {"id": fid, "name": clean, "bytes": len(data)}
+
+
+@router.get("/api/uploads")
+async def list_uploads(request: Request):
+    return UploadSink(_who(request)[0]).list()
+
+
+@router.delete("/api/uploads/{fid}")
+async def delete_upload(fid: str, request: Request):
+    UploadSink(_who(request)[0]).delete(fid)
+    return {"status": "gelöscht"}
+
+
+# ---------------------------------------------------------------- Skills (Team: Repo, persönlich: Home-Ordner)
+class SkillBody(BaseModel):
+    beschreibung: str = ""
+    anleitung: str = ""
+
+
+def _skill_list(skills: dict) -> list[dict]:
+    return [{"name": s["name"], "beschreibung": s["beschreibung"], "quelle": s["quelle"]}
+            for s in sorted(skills.values(), key=lambda s: (s["quelle"] != "team", s["name"]))]
+
+
+@router.get("/api/skills")
+async def list_skills(request: Request):
+    email, token = _who(request)
+    state = user_state(email)
+    return _skill_list(await asyncio.to_thread(all_skills, state, email, token))
+
+
+@router.get("/api/skills/{name}")
+async def get_skill(name: str, request: Request):
+    email, token = _who(request)
+    skill = (await asyncio.to_thread(all_skills, user_state(email), email, token)).get(name)
+    if not skill:
+        raise HTTPException(404, "Skill nicht gefunden.")
+    return skill
+
+
+@router.get("/api/skills/{name}/download")
+async def download_skill(name: str, request: Request):
+    email, token = _who(request)
+    skill = (await asyncio.to_thread(all_skills, user_state(email), email, token)).get(name)
+    if not skill:
+        raise HTTPException(404, "Skill nicht gefunden.")
+    return Response(render_skill(skill), media_type="text/markdown; charset=utf-8",
+                    headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(skill['name'])}.md"})
+
+
+@router.put("/api/skills/{name}")
+async def save_skill(name: str, body: SkillBody, request: Request):
+    email, token = _who(request)
+    try:
+        skill = check_skill(name, body.beschreibung, body.anleitung)
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from None
+    if skill["name"] in team_skills():
+        raise HTTPException(400, f"/{skill['name']} ist ein Team-Skill – bitte einen anderen Namen wählen.")
+    state = user_state(email)
+    personal = dict(await asyncio.to_thread(load_personal_skills, state, email, token))
+    if skill["name"] not in personal and len(personal) >= MAX_PERSONAL:
+        raise HTTPException(400, f"Höchstens {MAX_PERSONAL} persönliche Skills.")
+    personal[skill["name"]] = {**skill, "quelle": "persoenlich"}
+    await asyncio.to_thread(PersonalSkillStore(_client(token), email).save, personal)
+    state.skills = personal
+    return {"name": skill["name"], "saved": True}
+
+
+@router.delete("/api/skills/{name}")
+async def delete_skill(name: str, request: Request):
+    email, token = _who(request)
+    state = user_state(email)
+    personal = dict(await asyncio.to_thread(load_personal_skills, state, email, token))
+    if name not in personal:
+        raise HTTPException(404, "Persönlicher Skill nicht gefunden (Team-Skills lassen sich nur im Repo ändern).")
+    personal.pop(name)
+    await asyncio.to_thread(PersonalSkillStore(_client(token), email).save, personal)
+    state.skills = personal
+    return {"status": "gelöscht"}
+
+
 # ---------------------------------------------------------------- Oberfläche
 @router.get("/settings", response_class=HTMLResponse)
 async def settings_page():
@@ -178,6 +283,14 @@ async def guide_page():
 async def ui_js():
     return Response((_STATIC / "ui.js").read_text(encoding="utf-8"), media_type="application/javascript",
                     headers={"Cache-Control": "no-cache"})
+
+
+@router.get("/static/img/{name}")
+async def guide_image(name: str):
+    path = _STATIC / "img" / name
+    if not _IMG_RE.fullmatch(name) or not path.is_file():
+        raise HTTPException(404, "Bild nicht gefunden.")
+    return Response(path.read_bytes(), media_type="image/png", headers={"Cache-Control": "public, max-age=3600"})
 
 
 def inject_ui(html: bytes) -> bytes:

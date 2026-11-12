@@ -1,6 +1,9 @@
 /* Jira-Agent: Anpassung der Databricks-Chat-UI (e2e-chatbot-app-next), eingefügt von jira_agent/web.py.
    - blendet Seitenleiste (Chatverlauf) und die Hinweise "Ephemeral"/"Feedback disabled" aus
    - Kopfzeile: links der Name des Agenten, rechts "Anleitung", "Neuer Chat" und das Zahnrad
+   - Banner "Jira verbinden", solange kein Jira-Token gesetzt ist
+   - Dateien anhängen (Büroklammer, Strg+V, Drag & Drop) -> /jira/api/upload, Verweis "[Datei: name]" im Text
+   - Skill-Vorschläge beim Tippen von "/" (aus /jira/api/skills)
    - Bestätigungs-Button für "ja <CODE>"
    Die UI wird beim App-Start geklont; falls sich ihr Markup ändert, erscheinen die Buttons fest oben rechts. */
 (function () {
@@ -33,7 +36,31 @@
     '#jira-panel{width:min(820px,94vw);height:min(680px,90vh);background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 8px 30px rgba(0,0,0,.25)}',
     '#jira-panel iframe{border:0;width:100%;height:100%}',
     '.jira-confirm{margin:6px 0;padding:6px 12px;border-radius:6px;border:0;background:#1b5fd1;color:#fff;cursor:pointer;font-size:13px}',
-    '.jira-confirm:hover{background:#174fb0}'
+    '.jira-confirm:hover{background:#174fb0}',
+    /* Jira-Banner */
+    '#jira-banner{position:fixed;top:64px;left:50%;transform:translateX(-50%);z-index:60;width:min(720px,92vw);box-sizing:border-box;' +
+      'display:none;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 12px;border-radius:10px;font-size:13px;' +
+      'background:#fff8e1;color:#4a3800;border:1px solid #f0c36d;box-shadow:0 2px 8px rgba(0,0,0,.12)}',
+    '#jira-banner.ok{background:#e8f5e9;color:#1b5e20;border-color:#a5d6a7}',
+    '#jira-banner b{margin-right:4px}',
+    '#jira-banner input{flex:1;min-width:200px;padding:6px 8px;border:1px solid #d9b45a;border-radius:6px;font:inherit;background:#fff;color:#222}',
+    '#jira-banner button{padding:6px 12px;border-radius:6px;border:0;background:#1b5fd1;color:#fff;cursor:pointer;font:inherit}',
+    '#jira-banner a{color:inherit;text-decoration:underline;cursor:pointer}',
+    '#jira-banner .msg{width:100%;font-size:12px}',
+    /* Upload */
+    '#jira-attach{width:32px;height:32px;border-radius:999px;border:0;background:transparent;color:inherit;cursor:pointer;' +
+      'display:inline-flex;align-items:center;justify-content:center;opacity:.75}',
+    '#jira-attach:hover{opacity:1;background:rgba(128,128,128,.15)}',
+    '#jira-toast{position:fixed;bottom:110px;left:50%;transform:translateX(-50%);z-index:2147483002;padding:8px 14px;border-radius:8px;' +
+      'background:#222;color:#fff;font-size:13px;display:none;max-width:90vw}',
+    'form.jira-drop{outline:2px dashed #1b5fd1;outline-offset:4px}',
+    /* Skill-Vorschläge */
+    '#jira-skills{position:fixed;z-index:2147483002;display:none;max-height:260px;overflow:auto;min-width:280px;max-width:520px;' +
+      'background:#fff;color:#222;border:1px solid #ddd;border-radius:10px;box-shadow:0 6px 20px rgba(0,0,0,.18);font-size:13px;padding:4px}',
+    '#jira-skills div{padding:6px 10px;border-radius:6px;cursor:pointer}',
+    '#jira-skills div.active,#jira-skills div:hover{background:#eef3fd}',
+    '#jira-skills small{color:#666;margin-left:6px}',
+    '#jira-skills .team{font-size:10px;color:#1b5fd1;border:1px solid #1b5fd1;border-radius:4px;padding:0 4px;margin-left:6px}'
   ].join("\n");
   document.head.appendChild(style);
 
@@ -42,14 +69,18 @@
   overlay.id = "jira-overlay";
   overlay.innerHTML = '<div id="jira-panel"><iframe title="Jira Agent"></iframe></div>';
   var frame = overlay.querySelector("iframe");
-  function openPanel(url) { frame.src = url + "?t=" + Date.now(); overlay.style.display = "flex"; }
+  function openPanel(url) {
+    var parts = url.split("#");
+    frame.src = parts[0] + "?t=" + Date.now() + (parts[1] ? "#" + parts[1] : "");
+    overlay.style.display = "flex";
+  }
   function closePanel() { overlay.style.display = "none"; frame.src = "about:blank"; }
   overlay.addEventListener("click", function (e) { if (e.target === overlay) closePanel(); });
   document.addEventListener("keydown", function (e) { if (e.key === "Escape") closePanel(); });
   window.addEventListener("message", function (e) {
     if (e.origin !== location.origin) return;
-    if (e.data === "jira-settings-close") closePanel();
-    if (e.data === "jira-settings-saved") loadName();
+    if (e.data === "jira-settings-close") { closePanel(); loadMe(); loadSkills(); }
+    if (e.data === "jira-settings-saved") { loadMe(); loadSkills(); }
   });
 
   /* ---------- Buttons ---------- */
@@ -102,12 +133,186 @@
     if (document.title !== agentName) document.title = agentName;
   }
 
-  function loadName() {
+  function loadMe() {
     fetch("/jira/api/me", { credentials: "same-origin" })
       .then(function (r) { return r.ok ? r.json() : null; })
-      .then(function (d) { if (d && d.agent_name) { agentName = String(d.agent_name); ensureLayout(); } })
+      .then(function (d) {
+        if (!d) return;
+        if (d.agent_name) { agentName = String(d.agent_name); ensureLayout(); }
+        showBanner(!d.has_jira_token);
+      })
       .catch(function () {});
   }
+
+  /* ---------- Hilfen ---------- */
+  var toast = document.createElement("div");
+  toast.id = "jira-toast";
+  var toastTimer = null;
+  function showToast(text, ms) {
+    if (!toast.isConnected) document.body.appendChild(toast);
+    toast.textContent = text; toast.style.display = "block";
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { toast.style.display = "none"; }, ms || 3000);
+  }
+  function textarea() { return document.querySelector("form textarea") || document.querySelector("textarea"); }
+  function setText(ta, text) {
+    var setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value").set;
+    setter.call(ta, text);
+    ta.dispatchEvent(new Event("input", { bubbles: true }));
+  }
+
+  /* ---------- Jira-Banner: solange kein Token gesetzt ist ---------- */
+  var banner = document.createElement("div");
+  banner.id = "jira-banner";
+  banner.innerHTML =
+    '<b>Jira verbinden:</b><span>Fügen Sie Ihren Jira Personal Access Token ein.</span>' +
+    '<input type="password" autocomplete="off" placeholder="Jira-Token hier einfügen …" aria-label="Jira Personal Access Token">' +
+    '<button type="button">Verbinden</button><a data-help>Wo finde ich den Token?</a><div class="msg"></div>';
+  var bannerInput = banner.querySelector("input");
+  var bannerMsg = banner.querySelector(".msg");
+  var bannerWanted = false;
+  function showBanner(show) {
+    bannerWanted = show;
+    if (!banner.isConnected && document.body) document.body.appendChild(banner);
+    if (show) { banner.className = ""; banner.style.display = "flex"; }
+    else if (!banner.classList.contains("ok")) banner.style.display = "none";
+  }
+  function connectJira() {
+    var token = bannerInput.value.trim();
+    if (!token) { bannerMsg.textContent = "Bitte zuerst den Token einfügen."; return; }
+    bannerMsg.textContent = "Prüfe …";
+    fetch("/jira/api/credentials", {
+      method: "POST", credentials: "same-origin",
+      headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jira_token: token })
+    }).then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+      .then(function (res) {
+        if (!res.ok) { bannerMsg.textContent = (res.d && res.d.detail) || "Verbindung fehlgeschlagen."; return; }
+        bannerInput.value = "";
+        banner.className = "ok";
+        banner.innerHTML = "<b>Jira verbunden</b><span></span>";
+        banner.querySelector("span").textContent = "als " + res.d.jira_user;
+        setTimeout(function () { banner.style.display = "none"; }, 3500);
+        bannerWanted = false;
+        loadMe();
+      })
+      .catch(function () { bannerMsg.textContent = "Verbindung fehlgeschlagen."; });
+  }
+  banner.querySelector("button").addEventListener("click", connectJira);
+  bannerInput.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); connectJira(); } });
+  banner.querySelector("[data-help]").addEventListener("click", function () { openPanel("/jira/guide#jira-token"); });
+
+  /* ---------- Dateien hochladen: Büroklammer, Strg+V, Drag & Drop ---------- */
+  var fileInput = document.createElement("input");
+  fileInput.type = "file"; fileInput.multiple = true; fileInput.style.display = "none";
+  fileInput.accept = ".csv,.tsv,.xlsx,.xlsm,.pdf,.txt,.md,.json,.xml,.yaml,.yml,.log";
+  fileInput.addEventListener("change", function () { uploadFiles(fileInput.files); fileInput.value = ""; });
+  var CLIP_SVG =
+    '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+    '<path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>';
+  var attachBtn = document.createElement("button");
+  attachBtn.id = "jira-attach"; attachBtn.type = "button"; attachBtn.innerHTML = CLIP_SVG;
+  attachBtn.title = "Datei anhängen (CSV, Excel, PDF, Text) – auch per Strg+V oder Ziehen";
+  attachBtn.setAttribute("aria-label", "Datei anhängen");
+  attachBtn.addEventListener("click", function () { fileInput.click(); });
+
+  function uploadFiles(files) {
+    files = Array.prototype.slice.call(files || []);
+    if (!files.length) return;
+    showToast("Lade " + files.length + " Datei(en) hoch …", 10000);
+    Promise.all(files.map(function (f) {
+      var name = f.name || ("eingefuegt-" + Date.now() + "." + ((f.type.split("/")[1] || "bin").replace(/[^a-z0-9]/gi, "")));
+      return fetch("/jira/api/upload?name=" + encodeURIComponent(name), {
+        method: "POST", credentials: "same-origin",
+        headers: { "Content-Type": f.type || "application/octet-stream" }, body: f
+      }).then(function (r) { return r.json().then(function (d) { return r.ok ? d : Promise.reject(d.detail || "Fehler"); }); });
+    })).then(function (done) {
+      var ta = textarea();
+      var refs = done.map(function (d) { return "[Datei: " + d.name + "]"; }).join(" ");
+      if (ta) { setText(ta, (ta.value ? ta.value.replace(/\s*$/, " ") : "") + refs + " "); ta.focus(); }
+      showToast("Hochgeladen: " + done.map(function (d) { return d.name; }).join(", "));
+    }).catch(function (err) { showToast("Upload fehlgeschlagen: " + err, 6000); });
+  }
+  /* Capture-Phase: die Chat-UI selbst hat keinen Upload-Endpunkt, daher Dateien vorher abfangen */
+  document.addEventListener("paste", function (e) {
+    var files = e.clipboardData && e.clipboardData.files;
+    if (!files || !files.length || !(e.target && e.target.closest && e.target.closest("form"))) return;
+    e.preventDefault(); e.stopImmediatePropagation();
+    uploadFiles(files);
+  }, true);
+  document.addEventListener("dragover", function (e) {
+    var form = e.target && e.target.closest && e.target.closest("form");
+    if (!form || !e.dataTransfer || Array.prototype.indexOf.call(e.dataTransfer.types, "Files") < 0) return;
+    e.preventDefault(); form.classList.add("jira-drop");
+  }, true);
+  document.addEventListener("dragleave", function (e) {
+    var form = e.target && e.target.closest && e.target.closest("form");
+    if (form) form.classList.remove("jira-drop");
+  }, true);
+  document.addEventListener("drop", function (e) {
+    var form = e.target && e.target.closest && e.target.closest("form");
+    if (!form || !e.dataTransfer || !e.dataTransfer.files.length) return;
+    e.preventDefault(); e.stopImmediatePropagation(); form.classList.remove("jira-drop");
+    uploadFiles(e.dataTransfer.files);
+  }, true);
+  function ensureAttach() {
+    if (!fileInput.isConnected) document.body.appendChild(fileInput);
+    var send = document.querySelector('[data-testid="send-button"], [data-testid="stop-button"]');
+    if (send && send.parentNode && attachBtn.nextSibling !== send) send.parentNode.insertBefore(attachBtn, send);
+  }
+
+  /* ---------- Skills: Vorschläge beim Tippen von "/" ---------- */
+  var skills = [];
+  var popup = document.createElement("div");
+  popup.id = "jira-skills";
+  var matches = [], active = 0;
+  function loadSkills() {
+    fetch("/jira/api/skills", { credentials: "same-origin" })
+      .then(function (r) { return r.ok ? r.json() : []; })
+      .then(function (d) { skills = Array.isArray(d) ? d : []; })
+      .catch(function () {});
+  }
+  function hidePopup() { popup.style.display = "none"; matches = []; }
+  function choose(i) {
+    var ta = textarea(), s = matches[i];
+    if (!ta || !s) return;
+    setText(ta, "/" + s.name + " ");
+    hidePopup(); ta.focus();
+  }
+  function renderPopup(ta) {
+    var m = /^\/([a-z0-9-]*)$/.exec(ta.value);
+    if (!m || !skills.length) return hidePopup();
+    matches = skills.filter(function (s) { return s.name.indexOf(m[1]) === 0; });
+    if (!matches.length) return hidePopup();
+    active = Math.min(active, matches.length - 1);
+    popup.innerHTML = "";
+    matches.forEach(function (s, i) {
+      var row = document.createElement("div");
+      if (i === active) row.className = "active";
+      var b = document.createElement("b"); b.textContent = "/" + s.name; row.appendChild(b);
+      if (s.quelle === "team") { var t = document.createElement("span"); t.className = "team"; t.textContent = "Team"; row.appendChild(t); }
+      var d = document.createElement("small"); d.textContent = s.beschreibung; row.appendChild(d);
+      row.addEventListener("mousedown", function (e) { e.preventDefault(); choose(i); });
+      popup.appendChild(row);
+    });
+    if (!popup.isConnected) document.body.appendChild(popup);
+    var r = ta.getBoundingClientRect();
+    popup.style.left = r.left + "px";
+    popup.style.bottom = (window.innerHeight - r.top + 8) + "px";
+    popup.style.display = "block";
+  }
+  document.addEventListener("input", function (e) {
+    if (e.target && e.target.tagName === "TEXTAREA" && e.target.closest("form")) { active = 0; renderPopup(e.target); }
+  }, true);
+  document.addEventListener("keydown", function (e) {
+    if (popup.style.display !== "block" || !(e.target && e.target.tagName === "TEXTAREA")) return;
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault(); e.stopImmediatePropagation();
+      active = (active + (e.key === "ArrowDown" ? 1 : matches.length - 1)) % matches.length; renderPopup(e.target);
+    } else if (e.key === "Enter" || e.key === "Tab") {
+      e.preventDefault(); e.stopImmediatePropagation(); choose(active);
+    } else if (e.key === "Escape") { e.stopImmediatePropagation(); hidePopup(); }
+  }, true);
+  document.addEventListener("click", function (e) { if (!popup.contains(e.target)) hidePopup(); }, true);
 
   /* ---------- Bestätigungs-Button für "ja <CODE>" ---------- */
   var CODE_RE = /\bja\s+([A-F0-9]{6})\b/;
@@ -155,12 +360,15 @@
 
   /* ---------- Start und Beobachtung ---------- */
   var pending = false;
-  function refresh() { pending = false; ensureLayout(); scanCodes(); }
+  function refresh() {
+    pending = false; ensureLayout(); scanCodes(); ensureAttach();
+    if (bannerWanted && !banner.isConnected) document.body.appendChild(banner);
+  }
   new MutationObserver(function () {
     if (pending) return;
     pending = true;
     setTimeout(refresh, 300);
   }).observe(document.documentElement, { childList: true, subtree: true, characterData: true });
-  function start() { if (!document.body) return setTimeout(start, 50); refresh(); loadName(); }
+  function start() { if (!document.body) return setTimeout(start, 50); refresh(); loadMe(); loadSkills(); }
   start();
 })();

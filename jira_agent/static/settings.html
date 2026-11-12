@@ -23,6 +23,12 @@
   ul.tables{list-style:none;padding:0;margin:8px 0}
   ul.tables li{display:flex;justify-content:space-between;padding:4px 8px;border:1px solid #eee;border-radius:6px;margin-bottom:4px}
   footer{display:flex;justify-content:space-between;align-items:center;padding:10px 16px;border-top:1px solid #eee}
+  .skill{border:1px solid #eee;border-radius:8px;padding:8px 10px;margin-bottom:6px}
+  .skill .top{display:flex;justify-content:space-between;align-items:center;gap:8px}
+  .skill .acts{display:flex;gap:6px}
+  .badge{font-size:11px;border-radius:4px;padding:1px 5px;margin-left:6px;border:1px solid #1b5fd1;color:#1b5fd1}
+  .badge.own{border-color:#1a7f37;color:#1a7f37}
+  #skillForm textarea{min-height:180px}
 </style>
 </head>
 <body>
@@ -32,6 +38,7 @@
   <button data-tab="model">Modell</button>
   <button data-tab="data">Datenquellen</button>
   <button data-tab="rules">Regeln</button>
+  <button data-tab="skills">Skills</button>
 </nav>
 
 <section id="access" class="active">
@@ -73,6 +80,23 @@
   <div class="row"><button class="btn" id="resetRules">Standardregeln wiederherstellen</button></div>
 </section>
 
+<section id="skills">
+  <p class="hint">Ein Skill ist eine gespeicherte Anleitung. Im Chat <b>/name</b> tippen, um ihn zu starten (z. B. <code>/wochenreport</code>).
+    Team-Skills gelten für alle; Ihre eigenen Skills sieht nur Sie. Skills werden hier direkt gespeichert (eigener Speichern-Knopf).</p>
+  <div id="skillList"></div>
+  <div class="row"><button class="btn" id="newSkill">+ Neuer Skill</button><span id="skillMsg"></span></div>
+  <div id="skillForm" style="display:none">
+    <label for="skillName">Name (wird zu /name)</label>
+    <input id="skillName" type="text" maxlength="40" placeholder="z. B. wochenreport" autocomplete="off">
+    <div class="hint">Kleinbuchstaben, Ziffern, Bindestriche.</div>
+    <label for="skillDesc">Kurzbeschreibung</label>
+    <input id="skillDesc" type="text" maxlength="200" placeholder="z. B. Erstellt einen Wochenbericht meiner Tickets">
+    <label for="skillText">Anleitung für den Agenten</label>
+    <textarea id="skillText" placeholder="1. Suche alle Tickets, die mir zugewiesen sind und diese Woche geändert wurden.&#10;2. Gruppiere sie nach Status.&#10;3. Erstelle eine kurze Zusammenfassung und biete einen Excel-Export an."></textarea>
+    <div class="row"><button class="btn primary" id="saveSkill">Skill speichern</button><button class="btn" id="cancelSkill">Abbrechen</button></div>
+  </div>
+</section>
+
 <footer><span id="saveMsg"></span>
   <div class="row" style="margin:0"><button class="btn" id="close">Schließen</button><button class="btn primary" id="save">Speichern</button></div>
 </footer>
@@ -100,7 +124,70 @@
       document.querySelectorAll(".tabs button, section").forEach(function (x) { x.classList.remove("active"); });
       b.classList.add("active"); $(b.dataset.tab).classList.add("active");
       if (b.dataset.tab === "data") loadCatalogs();
+      if (b.dataset.tab === "skills") loadSkills();
     });
+  });
+
+  /* ---------- Skills ---------- */
+  var editing = null;
+  function skillButton(text, fn) { var b = document.createElement("button"); b.className = "btn"; b.textContent = text; b.addEventListener("click", fn); return b; }
+  async function loadSkills() {
+    try {
+      var list = await api("/jira/api/skills");
+      var box = $("skillList"); box.innerHTML = "";
+      if (!list.length) { var p = document.createElement("p"); p.className = "hint"; p.textContent = "Noch keine Skills."; box.appendChild(p); }
+      list.forEach(function (s) {
+        var d = document.createElement("div"); d.className = "skill";
+        var top = document.createElement("div"); top.className = "top";
+        var t = document.createElement("div");
+        var n = document.createElement("b"); n.textContent = "/" + s.name; t.appendChild(n);
+        var badge = document.createElement("span"); badge.className = "badge" + (s.quelle === "team" ? "" : " own");
+        badge.textContent = s.quelle === "team" ? "Team" : "Eigener"; t.appendChild(badge);
+        var acts = document.createElement("div"); acts.className = "acts";
+        if (s.quelle === "team") {
+          acts.appendChild(skillButton("Ansehen", function () { editSkill(s.name, true); }));
+        } else {
+          acts.appendChild(skillButton("Bearbeiten", function () { editSkill(s.name, false); }));
+          acts.appendChild(skillButton("Für Team vorschlagen", function () {
+            location.href = "/jira/api/skills/" + encodeURIComponent(s.name) + "/download";
+            msg("skillMsg", "Datei heruntergeladen – Anleitung unter „Anleitung → Skill fürs Team“.", true);
+          }));
+          acts.appendChild(skillButton("Löschen", async function () {
+            if (!confirm("Skill /" + s.name + " löschen?")) return;
+            try { await api("/jira/api/skills/" + encodeURIComponent(s.name), { method: "DELETE" }); msg("skillMsg", "Gelöscht.", true); loadSkills(); notifyPage(); }
+            catch (e) { msg("skillMsg", e.message, false); }
+          }));
+        }
+        top.appendChild(t); top.appendChild(acts); d.appendChild(top);
+        var desc = document.createElement("div"); desc.className = "hint"; desc.textContent = s.beschreibung; d.appendChild(desc);
+        box.appendChild(d);
+      });
+    } catch (e) { msg("skillMsg", "Skills nicht ladbar: " + e.message, false); }
+  }
+  function showSkillForm(skill, readOnly) {
+    editing = skill ? skill.name : null;
+    $("skillForm").style.display = "block";
+    $("skillName").value = skill ? skill.name : ""; $("skillName").disabled = !!skill;
+    $("skillDesc").value = skill ? skill.beschreibung : ""; $("skillText").value = skill ? skill.anleitung : "";
+    [$("skillDesc"), $("skillText")].forEach(function (x) { x.disabled = !!readOnly; });
+    $("saveSkill").style.display = readOnly ? "none" : "";
+    (readOnly ? $("cancelSkill") : (skill ? $("skillDesc") : $("skillName"))).focus();
+  }
+  async function editSkill(name, readOnly) {
+    try { showSkillForm(await api("/jira/api/skills/" + encodeURIComponent(name)), readOnly); }
+    catch (e) { msg("skillMsg", e.message, false); }
+  }
+  $("newSkill").addEventListener("click", function () { showSkillForm(null, false); });
+  $("cancelSkill").addEventListener("click", function () { $("skillForm").style.display = "none"; });
+  $("saveSkill").addEventListener("click", async function () {
+    var name = (editing || $("skillName").value).trim().toLowerCase();
+    if (!name) return msg("skillMsg", "Bitte einen Namen eintragen.", false);
+    try {
+      await api("/jira/api/skills/" + encodeURIComponent(name), { method: "PUT",
+        body: JSON.stringify({ beschreibung: $("skillDesc").value, anleitung: $("skillText").value }) });
+      $("skillForm").style.display = "none"; msg("skillMsg", "Gespeichert. Im Chat /" + name + " tippen.", true);
+      loadSkills(); notifyPage();
+    } catch (e) { msg("skillMsg", e.message, false); }
   });
 
   function renderStatus(me) {

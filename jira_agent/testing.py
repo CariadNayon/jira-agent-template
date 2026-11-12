@@ -149,13 +149,17 @@ class FakeFiles:
         return f"/jira/files/{name}"
 
 
-def run_tool(name: str, *, jira=None, sql=None, files=None, selected_tables=(), confirm: bool = True, **args) -> dict:
-    """Führt ein Tool wie im Agenten aus. Schreib-Tools werden mit confirm=True automatisch bestätigt."""
+def run_tool(name: str, *, jira=None, sql=None, files=None, uploads=None, selected_tables=(), confirm: bool = True,
+             **args) -> dict:
+    """Führt ein Tool wie im Agenten aus. Schreib-Tools werden mit confirm=True automatisch bestätigt.
+
+    uploads: z. B. UploadSink("test@example.com") aus jira_agent.state, vorher mit .put(name, mime, bytes) befüllt.
+    """
     tools = load_tools()
     if name not in tools:
         raise KeyError(f"Tool {name} nicht gefunden. Vorhanden: {sorted(tools)}")
     t = tools[name]
-    ctx = ToolContext(jira=jira, sql=sql, files=files, selected_tables=list(selected_tables))
+    ctx = ToolContext(jira=jira, sql=sql, files=files, uploads=uploads, selected_tables=list(selected_tables))
     rc = RunContext(ctx, b"test-secret", "")
     result = execute(t, rc, dict(args))
     if t.write and confirm and result.get("status") == "BESTAETIGUNG_NOETIG":

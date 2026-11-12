@@ -34,10 +34,12 @@ class UserState:
     settings: dict | None = None
     secret: bytes = field(default_factory=lambda: secrets.token_bytes(32))
     created: float = field(default_factory=time.time)
-    files: dict = field(default_factory=dict)
+    files: dict = field(default_factory=dict)          # vom Agenten erzeugte Dateien (Diagramme, Exporte)
+    uploads: dict = field(default_factory=dict)        # vom Nutzer hochgeladene Dateien
+    skills: dict | None = None                         # persönliche Skills (geladen aus dem Home-Ordner)
 
     def __repr__(self) -> str:
-        return f"UserState(jira={self.jira_user is not None}, files={len(self.files)})"
+        return f"UserState(jira={self.jira_user is not None}, files={len(self.files)}, uploads={len(self.uploads)})"
 
     def expired(self, now: float) -> bool:
         return now - self.created > _CRED_TTL
@@ -69,6 +71,35 @@ def logout(email: str) -> None:
         _users.pop(email, None)
 
 
+def _store(email: str, kind: str, name: str, mime: str, data: bytes) -> str:
+    """Legt eine Datei in state.files bzw. state.uploads ab (mit Ablaufzeit und Höchstzahl) und liefert die ID."""
+    if len(data) > _MAX_FILE_BYTES:
+        raise ValueError(f"Datei ist zu groß (max. {_MAX_FILE_BYTES // (1024 * 1024)} MB).")
+    with _lock:
+        files = getattr(_get(email), kind)
+        now = time.time()
+        for fid in [f for f, v in files.items() if now - v.created > _FILE_TTL]:
+            files.pop(fid)
+        while len(files) >= _MAX_FILES:
+            files.pop(next(iter(files)))
+        fid = secrets.token_urlsafe(16)
+        files[fid] = StoredFile(name, mime, data)
+    return fid
+
+
+def _load(email: str, kind: str, fid: str) -> StoredFile | None:
+    with _lock:
+        state = _users.get(email)
+        if not state or state.expired(time.time()):
+            return None
+        files = getattr(state, kind)
+        f = files.get(fid)
+        if f and time.time() - f.created > _FILE_TTL:
+            files.pop(fid, None)
+            return None
+        return f
+
+
 class FileSink:
     """Legt erzeugte Dateien für genau einen Nutzer ab und liefert die Download-URL."""
 
@@ -79,27 +110,38 @@ class FileSink:
         return "FileSink()"
 
     def put(self, name: str, mime: str, data: bytes) -> str:
-        if len(data) > _MAX_FILE_BYTES:
-            raise ValueError("Datei ist zu groß.")
-        with _lock:
-            files = _get(self.email).files
-            now = time.time()
-            for fid in [f for f, v in files.items() if now - v.created > _FILE_TTL]:
-                files.pop(fid)
-            while len(files) >= _MAX_FILES:
-                files.pop(next(iter(files)))
-            fid = secrets.token_urlsafe(16)
-            files[fid] = StoredFile(name, mime, data)
-        return f"/jira/files/{fid}"
+        return f"/jira/files/{_store(self.email, 'files', name, mime, data)}"
 
 
 def get_file(email: str, fid: str) -> StoredFile | None:
-    with _lock:
-        state = _users.get(email)
-        if not state or state.expired(time.time()):
-            return None
-        f = state.files.get(fid)
-        if f and time.time() - f.created > _FILE_TTL:
-            state.files.pop(fid, None)
-            return None
-        return f
+    return _load(email, "files", fid)
+
+
+class UploadSink:
+    """Vom Nutzer hochgeladene Dateien (nur im Speicher, laufen nach files_ttl_minutes ab)."""
+
+    def __init__(self, email: str):
+        self.email = email
+
+    def __repr__(self) -> str:
+        return "UploadSink()"
+
+    def put(self, name: str, mime: str, data: bytes) -> str:
+        return _store(self.email, "uploads", name, mime, data)
+
+    def get(self, fid: str) -> StoredFile | None:
+        return _load(self.email, "uploads", fid)
+
+    def list(self) -> list[dict]:
+        with _lock:
+            state = _users.get(self.email)
+            items = list(state.uploads.items()) if state else []
+        now = time.time()
+        return [{"id": fid, "name": f.name, "mime": f.mime, "bytes": len(f.data)}
+                for fid, f in items if now - f.created <= _FILE_TTL]
+
+    def delete(self, fid: str) -> None:
+        with _lock:
+            state = _users.get(self.email)
+            if state:
+                state.uploads.pop(fid, None)

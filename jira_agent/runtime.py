@@ -11,7 +11,8 @@ from jira_agent.data import SqlRunner
 from jira_agent.jira_client import JiraClient
 from jira_agent.llm import build_model
 from jira_agent.settings_store import SettingsStore
-from jira_agent.state import FileSink, UserState, user_state
+from jira_agent.skills import PersonalSkillStore, skills_prompt, team_skills
+from jira_agent.state import FileSink, UploadSink, UserState, user_state
 from jira_agent.tools import ToolContext
 
 WAREHOUSE_ID = os.environ.get("WAREHOUSE_ID") or BUNDLE.get("warehouse_id", "")
@@ -34,10 +35,14 @@ Regeln des Nutzers:
 Jira: {jira}
 Freigegebene Tabellen (nur diese, nur lesend, immer voll qualifiziert als catalog.schema.table):
 {tables}
+Hochgeladene Dateien: {uploads}
+
+{skills}
 
 Vorgehen:
 - Jira-Tickets suchst du mit jira_search (JQL), Details holst du mit jira_get_issue.
 - Für Daten: zuerst describe_table, dann run_readonly_sql mit genau einem SELECT.
+- Hochgeladene Dateien ("[Datei: name]" in der Nachricht) liest du mit read_uploaded_file.
 - Diagramme erstellst du mit create_chart, Dateien mit export_file. Gib das Feld "markdown"
   aus dem Ergebnis unverändert in deiner Antwort aus, damit Bild bzw. Download-Link erscheinen.
 - Schreib-Tools rufst du zuerst ohne confirmation_code auf. Das Tool liefert einen Code.
@@ -98,6 +103,23 @@ def last_user_text(messages: list[dict]) -> str:
     return ""
 
 
+def load_personal_skills(state: UserState, email: str, token: str | None) -> dict:
+    if state.skills is None:
+        loaded = {}
+        if token and email and email != "local":
+            try:
+                loaded = PersonalSkillStore(user_client(token), email).load()
+            except Exception:
+                loaded = {}
+        state.skills = loaded
+    return state.skills
+
+
+def all_skills(state: UserState, email: str, token: str | None) -> dict:
+    """Persönliche und Team-Skills; bei gleichem Namen gilt der Team-Skill."""
+    return {**load_personal_skills(state, email, token), **team_skills()}
+
+
 def prepare(headers: Mapping[str, str], messages: list[dict]):
     """Liefert (agent, run_context) für Runner.run(agent, messages, context=run_context)."""
     from agents import Agent
@@ -112,19 +134,25 @@ def prepare(headers: Mapping[str, str], messages: list[dict]):
     settings = load_settings(state, email, token)
     tables = list(settings["selected_tables"])
     w = user_client(token) if token else None
+    uploads = UploadSink(email)
+    uploaded = uploads.list()
     tool_ctx = ToolContext(
         jira=JiraClient(CFG["jira"]["base_url"], state.creds["jira_token"]) if state.creds.get("jira_token") else None,
         sql=SqlRunner(w, WAREHOUSE_ID, CFG["data"]["row_limit"]) if (w and tables) else None,
         files=FileSink(email),
+        uploads=uploads if uploaded else None,
         selected_tables=tables,
     )
+    user_text = last_user_text(messages)
     instructions = INSTRUCTIONS.format(
         name=agent_name(state, settings),
         rules=settings["rules"] or "(keine)",
         jira=f"verbunden als {state.jira_user}" if tool_ctx.jira else
-             "nicht verbunden – bitte den Nutzer bitten, oben rechts über das Zahnrad seinen Jira-Token einzutragen",
+             "nicht verbunden – bitte den Nutzer bitten, oben im Chat seinen Jira-Token einzutragen",
         tables="\n".join(f"- {t}" for t in tables) or "(keine – Tabellen lassen sich über das Zahnrad freigeben)",
+        uploads=", ".join(f"{u['name']} (id: {u['id']})" for u in uploaded) or "(keine)",
+        skills=skills_prompt(all_skills(state, email, token), user_text),
     )
     model = build_model(settings["llm_provider"], CFG["llm"], settings, state.creds)
     agent = Agent(name="Jira Agent", instructions=instructions, model=model, tools=build_function_tools(tool_ctx))
-    return agent, RunContext(tool_ctx, state.secret, last_user_text(messages))
+    return agent, RunContext(tool_ctx, state.secret, user_text)

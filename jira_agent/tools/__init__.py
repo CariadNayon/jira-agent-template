@@ -15,9 +15,9 @@ Eigenes Tool hinzufügen: neue Datei anlegen und eine Funktion mit @tool dekorie
 - Erster Satz/Absatz des Docstrings = Beschreibung für das Modell.
 - Zeilen "name: Text" im Docstring = Beschreibung des Parameters.
 - Typen aus den Type-Hints (str, int, float, bool, list[str], Literal["a", "b"]); ohne Standardwert = Pflicht.
-- Erstes Argument ist immer ctx (ToolContext): ctx.jira, ctx.sql, ctx.files, ctx.selected_tables.
+- Erstes Argument ist immer ctx (ToolContext): ctx.jira, ctx.sql, ctx.files, ctx.uploads, ctx.selected_tables.
 - write=True: Der Agent muss vorher "ja <CODE>" einholen (im Code erzwungen).
-- needs=["jira"|"sql"|"files"] blendet ein Tool aus, solange die Voraussetzung fehlt.
+- needs=["jira"|"sql"|"files"|"uploads"] blendet ein Tool aus, solange die Voraussetzung fehlt.
 Siehe example_custom_tool.py.
 """
 from __future__ import annotations
@@ -37,10 +37,12 @@ class ToolContext:
     jira: Any = None                 # JiraClient der Sitzung (oder None)
     sql: Any = None                  # SqlRunner mit Nutzerrechten (oder None)
     files: Any = None                # FileSink des Nutzers für Diagramme/Exporte (oder None)
+    uploads: Any = None              # UploadSink mit hochgeladenen Dateien (oder None, wenn keine)
     selected_tables: list[str] = field(default_factory=list)
 
     def __repr__(self) -> str:      # keine Clients/Keys in Traces
-        return f"ToolContext(jira={self.jira is not None}, sql={self.sql is not None}, tables={len(self.selected_tables)})"
+        return (f"ToolContext(jira={self.jira is not None}, sql={self.sql is not None}, "
+                f"uploads={self.uploads is not None}, tables={len(self.selected_tables)})")
 
 
 @dataclass(frozen=True)
