@@ -23,6 +23,7 @@ from jira_agent.runtime import (DEFAULT_SETTINGS, agent_name, all_skills, defaul
 from jira_agent.settings_store import SettingsStore, sanitize
 from jira_agent.skills import MAX_PERSONAL, PersonalSkillStore, check_skill, render_skill, team_skills
 from jira_agent.state import UploadSink, get_file, logout, user_state
+from jira_agent.uploads import validate_upload
 
 _STATIC = Path(__file__).parent / "static"
 _UI_TAG = b'<script src="/jira/static/ui.js" defer></script>'
@@ -172,7 +173,7 @@ async def download(fid: str, request: Request):
 
 # ---------------------------------------------------------------- Uploads (nur Speicher, nur für den Besitzer)
 @router.post("/api/upload")
-async def upload(name: str, request: Request):
+async def upload(name: str, request: Request, chat_id: str | None = None):
     """Rohdaten im Body, Dateiname als Query-Parameter (ohne multipart, keine Zusatzpakete nötig)."""
     email, _ = _who(request)
     if int(request.headers.get("content-length") or 0) > _MAX_UPLOAD:
@@ -184,8 +185,26 @@ async def upload(name: str, request: Request):
         raise HTTPException(413, "Datei ist zu groß (max. 20 MB).")
     clean = _UPLOAD_NAME_RE.sub("_", Path(name).name).strip()[:100] or "datei"
     mime = (request.headers.get("content-type") or "application/octet-stream").split(";")[0]
-    fid = UploadSink(email).put(clean, mime, data)
-    return {"id": fid, "name": clean, "bytes": len(data)}
+    if chat_id is not None and not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", chat_id):
+        raise HTTPException(400, "Ungültige Gesprächskennung.")
+    try:
+        mime = await asyncio.to_thread(validate_upload, clean, mime, data,
+                                       images_enabled=CFG["llm"].get("supports_images", False))
+    except ValueError as e:
+        raise HTTPException(415, str(e)) from None
+    fid = UploadSink(email, conversation_id=chat_id).put(clean, mime, data)
+    return {"id": fid, "name": clean, "bytes": len(data), "mime": mime,
+            "reference": f"[Datei: {clean}](/jira/uploads/{fid})"}
+
+
+@router.get("/uploads/{fid}")
+async def uploaded_file(fid: str, request: Request):
+    f = UploadSink(_who(request)[0]).get(fid)
+    if f is None:
+        raise HTTPException(404, "Datei nicht gefunden oder abgelaufen.")
+    return Response(f.data, media_type=f.mime, headers={
+        "Content-Disposition": f"attachment; filename*=UTF-8''{quote(f.name)}",
+        "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff"})
 
 
 @router.get("/api/uploads")

@@ -5,6 +5,7 @@ jira:
   base_url: https://devstack.vwgroup.com/jira/rest/api/2
 
 llm:
+  supports_images: true                 # Azure-Deployment muss Bild-Eingaben unterstützen
   provider: azure_central                 # azure_central | azure_own (siehe jira_agent/llm.py)
   azure_endpoint: https://inc43errormana0783142845.cognitiveservices.azure.com/
   api_version: 2024-12-01-preview

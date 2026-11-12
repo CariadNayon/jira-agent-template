@@ -25,6 +25,7 @@ class StoredFile:
     mime: str
     data: bytes
     created: float = field(default_factory=time.time)
+    conversation_id: str | None = None
 
 
 @dataclass(repr=False)
@@ -73,7 +74,7 @@ def logout(email: str) -> None:
         _users.pop(email, None)
 
 
-def _store(email: str, kind: str, name: str, mime: str, data: bytes) -> str:
+def _store(email: str, kind: str, name: str, mime: str, data: bytes, conversation_id: str | None = None) -> str:
     """Legt eine Datei in state.files bzw. state.uploads ab (mit Ablaufzeit und Höchstzahl) und liefert die ID."""
     if len(data) > _MAX_FILE_BYTES:
         raise ValueError(f"Datei ist zu groß (max. {_MAX_FILE_BYTES // (1024 * 1024)} MB).")
@@ -85,7 +86,7 @@ def _store(email: str, kind: str, name: str, mime: str, data: bytes) -> str:
         while len(files) >= _MAX_FILES:
             files.pop(next(iter(files)))
         fid = secrets.token_urlsafe(16)
-        files[fid] = StoredFile(name, mime, data)
+        files[fid] = StoredFile(name, mime, data, conversation_id=conversation_id)
     return fid
 
 
@@ -120,29 +121,47 @@ def get_file(email: str, fid: str) -> StoredFile | None:
 
 
 class UploadSink:
-    """Vom Nutzer hochgeladene Dateien (nur im Speicher, laufen nach files_ttl_minutes ab)."""
+    """Owner-only storage; model access is additionally scoped to a chat and explicit references."""
 
-    def __init__(self, email: str):
+    def __init__(self, email: str, *, conversation_id: str | None = None, file_ids: set[str] | None = None):
         self.email = email
+        self.conversation_id = conversation_id
+        self.file_ids = file_ids
 
     def __repr__(self) -> str:
         return "UploadSink()"
 
     def put(self, name: str, mime: str, data: bytes) -> str:
-        return _store(self.email, "uploads", name, mime, data)
+        return _store(self.email, "uploads", name, mime, data, self.conversation_id)
 
     def get(self, fid: str) -> StoredFile | None:
-        return _load(self.email, "uploads", fid)
+        if self.file_ids is not None and fid not in self.file_ids:
+            return None
+        f = _load(self.email, "uploads", fid)
+        if f and self.conversation_id is not None and f.conversation_id != self.conversation_id:
+            return None
+        return f
+
+    def bind(self, fid: str, conversation_id: str) -> None:
+        """Bind an API upload on first explicit use. Existing chat bindings cannot be changed."""
+        if not conversation_id:
+            return
+        with _lock:
+            state = _users.get(self.email)
+            f = state.uploads.get(fid) if state and not state.expired(time.time()) else None
+            if f and time.time() - f.created <= _FILE_TTL and f.conversation_id is None:
+                f.conversation_id = conversation_id
 
     def list(self) -> list[dict]:
         with _lock:
             state = _users.get(self.email)
-            items = list(state.uploads.items()) if state else []
-        now = time.time()
+            ids = list(state.uploads) if state and not state.expired(time.time()) else []
         return [{"id": fid, "name": f.name, "mime": f.mime, "bytes": len(f.data)}
-                for fid, f in items if now - f.created <= _FILE_TTL]
+                for fid in ids if (f := self.get(fid)) is not None]
 
     def delete(self, fid: str) -> None:
+        if self.get(fid) is None:
+            return
         with _lock:
             state = _users.get(self.email)
             if state:

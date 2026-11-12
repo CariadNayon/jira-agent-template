@@ -226,11 +226,13 @@ class ProcessManager:
                 print("WARNING: Failed to clone frontend. Continuing with backend only.")
                 self.no_ui = True
             else:
+                from scripts.frontend_attachments import ensure_frontend_attachments
                 from scripts.frontend_identity import ensure_frontend_identity
                 from scripts.frontend_safety import ensure_frontend_safety
 
                 ensure_frontend_identity(Path("e2e-chatbot-app-next"))
                 ensure_frontend_safety(Path("e2e-chatbot-app-next"))
+                ensure_frontend_attachments(Path("e2e-chatbot-app-next"))
                 # Set API_PROXY environment variable for frontend to connect to backend
                 os.environ["API_PROXY"] = f"http://localhost:{self.port}/invocations"
 

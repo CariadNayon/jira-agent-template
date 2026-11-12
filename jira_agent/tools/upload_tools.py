@@ -10,6 +10,7 @@ import io
 from pathlib import PurePath
 
 from jira_agent.tools import ToolContext, tool
+from jira_agent.uploads import image_info
 
 _MAX_TEXT = 20000
 _TEXT_TYPES = {".txt", ".md", ".json", ".xml", ".yaml", ".yml", ".log", ".html", ".sql", ".py"}
@@ -77,7 +78,8 @@ def list_uploaded_files(ctx: ToolContext) -> dict:
 
 @tool(needs=["uploads"])
 def read_uploaded_file(ctx: ToolContext, file_id: str, max_rows: int = 200) -> dict:
-    """Liest eine hochgeladene Datei: Tabellen (CSV, Excel) als Spalten und Zeilen, Text und PDFs als Text.
+    """Liest Tabellen (CSV, Excel), Text und PDF-Text. Für PNG/JPEG/WebP werden nur Metadaten geliefert;
+    die referenzierten Bilder stehen dem Modell direkt in der Benutzernachricht zur Verfügung.
 
     file_id: ID der Datei (siehe list_uploaded_files)
     max_rows: maximale Zeilen je Tabelle (höchstens 1000)
@@ -88,7 +90,9 @@ def read_uploaded_file(ctx: ToolContext, file_id: str, max_rows: int = 200) -> d
     max_rows = max(1, min(int(max_rows), 1000))
     ext = PurePath(f.name).suffix.lower()
     out: dict = {"name": f.name}
-    if ext in (".csv", ".tsv"):
+    if ext in (".png", ".jpg", ".jpeg", ".webp"):
+        out.update({"type": "image", **image_info(f.name, f.data)})
+    elif ext in (".csv", ".tsv"):
         out.update(read_table_text(_decode(f.data), max_rows))
     elif ext in (".xlsx", ".xlsm"):
         out.update(read_excel(f.data, max_rows))

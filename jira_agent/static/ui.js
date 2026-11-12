@@ -204,33 +204,63 @@
   /* ---------- Dateien hochladen: Büroklammer, Strg+V, Drag & Drop ---------- */
   var fileInput = document.createElement("input");
   fileInput.type = "file"; fileInput.multiple = true; fileInput.style.display = "none";
-  fileInput.accept = ".csv,.tsv,.xlsx,.xlsm,.pdf,.txt,.md,.json,.xml,.yaml,.yml,.log";
+  fileInput.accept = ".png,.jpg,.jpeg,.webp,.csv,.tsv,.xlsx,.xlsm,.pdf,.txt,.md,.json,.xml,.yaml,.yml,.log,.html,.sql,.py";
   fileInput.addEventListener("change", function () { uploadFiles(fileInput.files); fileInput.value = ""; });
   var CLIP_SVG =
     '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
     '<path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>';
   var attachBtn = document.createElement("button");
   attachBtn.id = "jira-attach"; attachBtn.type = "button"; attachBtn.innerHTML = CLIP_SVG;
-  attachBtn.title = "Datei anhängen (CSV, Excel, PDF, Text) – auch per Strg+V oder Ziehen";
+  attachBtn.title = "Datei anhängen (Bilder, CSV, Excel, PDF, Text) – auch per Strg+V oder Ziehen";
   attachBtn.setAttribute("aria-label", "Datei anhängen");
   attachBtn.addEventListener("click", function () { fileInput.click(); });
 
+  var uploadsInFlight = 0;
+  document.addEventListener("submit", function (e) {
+    if (uploadsInFlight && e.target && e.target.querySelector && e.target.querySelector("textarea")) {
+      e.preventDefault(); e.stopImmediatePropagation(); showToast("Bitte warten, bis die Anhänge hochgeladen sind.", 5000);
+    }
+  }, true);
   function uploadFiles(files) {
-    files = Array.prototype.slice.call(files || []);
+    files = Array.prototype.slice.call(files || []).map(function (f) {
+      if (f.name) return f;
+      var ext = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp" }[f.type] || "bin";
+      return new File([f], "eingefuegt-" + Date.now() + "." + ext, { type: f.type });
+    });
     if (!files.length) return;
-    showToast("Lade " + files.length + " Datei(en) hoch …", 10000);
-    Promise.all(files.map(function (f) {
-      var name = f.name || ("eingefuegt-" + Date.now() + "." + ((f.type.split("/")[1] || "bin").replace(/[^a-z0-9]/gi, "")));
-      return fetch("/jira/api/upload?name=" + encodeURIComponent(name), {
+    var host = document.querySelector("[data-jira-chat-id]");
+    var chatId = host && host.getAttribute("data-jira-chat-id");
+    if (!chatId) { showToast("Der Chat ist noch nicht bereit. Bitte Seite neu laden.", 6000); return; }
+    var allowed = /\.(png|jpe?g|webp|csv|tsv|xlsx|xlsm|pdf|txt|md|json|xml|ya?ml|log|html|sql|py)$/i;
+    var invalid = files.find(function (f) { return !allowed.test(f.name || ""); });
+    if (invalid) { showToast("Dateityp nicht unterstützt: " + invalid.name + ". Bilder bitte als PNG, JPEG oder WebP.", 7000); return; }
+    var oversized = files.find(function (f) { return f.size > (/\.(png|jpe?g|webp)$/i.test(f.name) ? 5 : 20) * 1024 * 1024; });
+    if (oversized) { showToast("Datei zu groß: " + oversized.name + ". Bilder maximal 5 MB, andere Dateien 20 MB.", 7000); return; }
+    uploadsInFlight += 1;
+    var pending = files.map(function (f) {
+      return fetch("/jira/api/upload?name=" + encodeURIComponent(f.name) + "&chat_id=" + encodeURIComponent(chatId), {
         method: "POST", credentials: "same-origin",
         headers: { "Content-Type": f.type || "application/octet-stream" }, body: f
       }).then(function (r) { return r.json().then(function (d) { return r.ok ? d : Promise.reject(d.detail || "Fehler"); }); });
-    })).then(function (done) {
+    });
+    showToast("Lade " + files.length + " Datei(en) hoch …", 10000);
+    Promise.allSettled(pending).then(function (results) {
+      var done = results.filter(function (r) { return r.status === "fulfilled"; }).map(function (r) { return r.value; });
+      var failed = results.filter(function (r) { return r.status === "rejected"; });
+      // Navigating during upload must never attach files to a different chat's composer.
+      var current = document.querySelector("[data-jira-chat-id]");
+      if (!current || current.getAttribute("data-jira-chat-id") !== chatId) {
+        showToast("Die Dateien gehören zum vorherigen Chat. Bitte im aktuellen Chat erneut anhängen.", 7000); return;
+      }
       var ta = textarea();
-      var refs = done.map(function (d) { return "[Datei: " + d.name + "]"; }).join(" ");
-      if (ta) { setText(ta, (ta.value ? ta.value.replace(/\s*$/, " ") : "") + refs + " "); ta.focus(); }
-      showToast("Hochgeladen: " + done.map(function (d) { return d.name; }).join(", "));
-    }).catch(function (err) { showToast("Upload fehlgeschlagen: " + err, 6000); });
+      if (ta && done.length) {
+        var refs = done.map(function (d) { return d.reference; }).join(" ");
+        setText(ta, (ta.value ? ta.value.replace(/\s*$/, " ") : "") + refs + " "); ta.focus();
+      }
+      var text = done.length ? "Hochgeladen: " + done.map(function (d) { return d.name; }).join(", ") : "";
+      if (failed.length) text += (text ? " · " : "") + "Fehlgeschlagen: " + failed.map(function (r) { return String(r.reason); }).join("; ");
+      showToast(text, failed.length ? 8000 : 3000);
+    }).finally(function () { uploadsInFlight -= 1; });
   }
   /* Capture-Phase: die Chat-UI selbst hat keinen Upload-Endpunkt, daher Dateien vorher abfangen */
   document.addEventListener("paste", function (e) {

@@ -67,6 +67,22 @@ Ein Skill kann vorhandene Tools kombinieren, aber keine neuen Berechtigungen ode
 
 Die Dateien unter `.claude/skills/` sind dagegen Arbeitsanleitungen für die KI, die den Code entwickelt. Für Copilot `AGENTS.md` und die passende Arbeitsanleitung explizit mitgeben.
 
+## Bilder und Dateianhänge
+
+Der Upload und die Verarbeitung sind getrennt: `POST /jira/api/upload?name=image.png&chat_id=<id>` prüft und speichert die Datei, erzeugt eine eindeutige Markdown-Referenz und bindet sie an Benutzer und Chat. Die Oberfläche verwendet die echte Chat-ID auch auf der Startseite. API-Aufrufer können ohne `chat_id` hochladen; die Datei wird beim ersten ausdrücklichen Verweis in einer Benutzernachricht an `context.conversation_id` gebunden. Bereits gebundene Dateien lassen sich nicht in einen anderen Chat umhängen.
+
+`prepare_uploads` in `jira_agent/uploads.py` wertet ausschließlich Referenzen in Benutzernachrichten aus. Andere Uploads des Benutzers sowie Referenzen in Ticket-/Tool-Inhalten werden nicht automatisch bereitgestellt. Der Modell-Kontext bekommt nur die im Verlauf referenzierten Dateien dieses Chats. Die Besitzer können Dateien weiterhin über ihre authentifizierten Download-Links herunterladen.
+
+PNG, JPEG und nicht animiertes WebP werden mit der bereits über matplotlib installierten Pillow-Bibliothek geprüft. Dateiendung und tatsächliches Format müssen passen; maximal 5 MB und 20 Millionen Pixel pro Bild. SVG, GIF, HEIC und beschädigte Bilder werden vor dem Speichern abgelehnt. Andere Uploads bleiben auf 20 MB begrenzt. Die Oberfläche prüft Format/Größe vorab und zeigt bei teilweise fehlgeschlagenen Uploads auch die erfolgreich hochgeladenen Anhänge an. Während eines Uploads wird das Absenden blockiert; ein Chatwechsel darf die fertigen Referenzen nicht in den falschen Chat einfügen.
+
+Das Backend fügt Bilder als native `input_image`-Inhalte mit Data-URL in die zugehörige Benutzernachricht ein. Das vorhandene Agents SDK übersetzt sie für Azure Chat Completions in `image_url`. Der Adapter muss dafür weder Base64-Text als Tool-Ergebnis abschneiden noch einen externen Bild-Link abrufen. `read_uploaded_file` liefert für Bilder nur Name, Format und Abmessungen; Text-/Tabellendateien werden weiterhin über dieses Tool gelesen.
+
+Bis zu vier zuletzt referenzierte Bilder und maximal 10 MB Bilddaten werden pro Anfrage übergeben. Aktuelle Bilder haben Vorrang. Ältere, aus Platzgründen ausgelassene oder abgelaufene Anhänge werden im Modell-Kontext ausdrücklich markiert. Die Dateien liegen weiterhin nur temporär im Arbeitsspeicher. Neue Uploads verwenden IDs in ihren Referenzen; alte `[Datei: name]`-Verweise werden nur aufgelöst, wenn der Name im bereits gebundenen Chat eindeutig ist.
+
+`llm.supports_images: true` ist eine Konfigurationsangabe, kein automatischer Nachweis der Modellfähigkeit. Das tatsächliche Azure-Deployment und seine API-Version müssen Bild-Eingaben unterstützen. Für Textmodelle auf `false` setzen; dann werden Bild-Uploads abgewiesen. Bei einem eigenen Azure-Deployment gilt dieselbe Voraussetzung. Lokale Tests prüfen die tatsächlichen SDK-HTTP-Payloads gegen einen simulierten Azure-Endpunkt; die Erkennungsqualität muss im Ziel-Workspace getestet werden.
+
+Bilder sind Daten, keine Anweisungen oder Freigaben für Jira-Aktionen. Bildinhalte werden an das konfigurierte Modell übertragen und können wie andere Modell-Eingaben in MLflow-Traces erscheinen. Gescanntes PDF, OCR und vollständige Dateianalysen sind dadurch noch nicht implementiert.
+
 ## Jira-Verhalten und Grenzen
 
 - Die Integration richtet sich an Jira Data Center mit Bearer-Token und den paginierten Create-Metadaten-Endpunkten (ab Jira 8.4). Jira Cloud benötigt eine angepasste Authentifizierung und Benutzerauflösung.
