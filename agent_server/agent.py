@@ -17,10 +17,11 @@ from mlflow.types.responses import (
     ResponsesAgentStreamEvent,
 )
 
-from agent_server.history import normalize_history_items
+from agent_server.history import normalize_history_items, public_output_item
 from agent_server.utils import get_session_id, process_agent_stream_events
 from jira_agent import CFG
 from jira_agent.runtime import prepare
+from jira_agent.model_input import make_run_config
 
 set_default_openai_api("chat_completions")
 set_trace_processors([])  # only use mlflow for trace processing
@@ -34,8 +35,8 @@ async def invoke_handler(request: ResponsesAgentRequest) -> ResponsesAgentRespon
         mlflow.update_current_trace(metadata={"mlflow.trace.session": session_id})
     messages = normalize_history_items([i.model_dump() for i in request.input])
     agent, run_ctx = await asyncio.to_thread(prepare, get_request_headers(), messages, get_session_id(request) or "")
-    result = await Runner.run(agent, messages, context=run_ctx, max_turns=CFG["agent"]["max_turns"])
-    return ResponsesAgentResponse(output=[item.to_input_item() for item in result.new_items])
+    result = await Runner.run(agent, messages, context=run_ctx, run_config=make_run_config(), max_turns=CFG["agent"]["max_turns"])
+    return ResponsesAgentResponse(output=[public_output_item(item.to_input_item()) for item in result.new_items])
 
 
 @stream()
@@ -46,6 +47,6 @@ async def stream_handler(
         mlflow.update_current_trace(metadata={"mlflow.trace.session": session_id})
     messages = normalize_history_items([i.model_dump() for i in request.input])
     agent, run_ctx = await asyncio.to_thread(prepare, get_request_headers(), messages, get_session_id(request) or "")
-    result = Runner.run_streamed(agent, input=messages, context=run_ctx, max_turns=CFG["agent"]["max_turns"])
+    result = Runner.run_streamed(agent, input=messages, context=run_ctx, run_config=make_run_config(), max_turns=CFG["agent"]["max_turns"])
     async for event in process_agent_stream_events(result.stream_events()):
         yield event

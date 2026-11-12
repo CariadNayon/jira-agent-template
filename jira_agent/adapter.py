@@ -9,6 +9,7 @@ Argumente gebunden. Ein Aktionsbeleg verhindert doppelte Ausführung während de
 from __future__ import annotations
 
 import asyncio
+import base64
 import functools
 import hashlib
 import hmac
@@ -16,6 +17,7 @@ import json
 import re
 
 from jira_agent.approvals import ActionLedger
+from jira_agent.visual_output import VisualResult
 from jira_agent.tools import REGISTRY, Tool, ToolContext, json_schema, load_tools
 
 _MAX_OUTPUT = 20000
@@ -55,7 +57,7 @@ def available_tools(tool_ctx: ToolContext) -> list[Tool]:
             and all(getattr(tool_ctx, n, None) for n in t.needs)]
 
 
-def execute(t: Tool, rc: RunContext, args: dict) -> dict:
+def execute(t: Tool, rc: RunContext, args: dict) -> dict | VisualResult:
     """Execute writes once per explicit approval, including across retries/concurrent requests."""
     claimed_code = None
     try:
@@ -94,7 +96,7 @@ def execute(t: Tool, rc: RunContext, args: dict) -> dict:
         return result
 
 
-async def _on_invoke(t: Tool, ctx, arguments: str) -> str:
+async def _on_invoke(t: Tool, ctx, arguments: str) -> str | list:
     try:
         args = json.loads(arguments or "{}")
         if not isinstance(args, dict):
@@ -103,11 +105,18 @@ async def _on_invoke(t: Tool, ctx, arguments: str) -> str:
         result = {"error": type(e).__name__, "details": str(e)[:200]}
     else:
         result = await asyncio.to_thread(execute, t, ctx.context, args)   # Tools sind blockierend
+    if isinstance(result, VisualResult):
+        from agents.tool import ToolOutputText, ToolOutputImage
+        content = [ToolOutputText(text=json.dumps(result.metadata,ensure_ascii=False,default=str))]
+        for image in result.images:
+            content.append(ToolOutputText(text=f"PDF Seite {image.page}"))
+            content.append(ToolOutputImage(image_url=f"data:{image.mime};base64," + base64.b64encode(image.data).decode('ascii'),detail="high"))
+        return content
     encoded = json.dumps(result, ensure_ascii=False, default=str)
     if len(encoded) > _MAX_OUTPUT:
         # Never cut JSON midway through a string/list. Metadata tools support field/value filters.
         encoded = json.dumps({"status": "RESULT_TOO_LARGE", "truncated": True,
-                              "hint": "Ergebnis eingrenzen (field_id, value_query, max_results) und erneut lesen. "
+                              "hint": "Ergebnis eingrenzen (field_id, value_query, columns, max_rows, max_results) und erneut lesen. "
                                       "Eine ausgeführte Schreibaktion nicht wiederholen.",
                               "preview": encoded[:12000]}, ensure_ascii=False)
     return encoded

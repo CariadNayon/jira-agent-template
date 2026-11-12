@@ -33,7 +33,8 @@ def jira_set_status(ctx: ToolContext, issue_key: str, status: str, comment: str 
 
    - Erster Absatz des Docstrings = Beschreibung für das Modell (Deutsch, konkret, mit Beispiel).
    - `name: Text`-Zeilen = Parameterbeschreibungen. Typen aus Type-Hints: `str`, `int`, `float`, `bool`, `list[str]`, `Literal["a", "b"]`. Ohne Standardwert = Pflicht.
-   - Rückgabe: kleines `dict`. Fehler als Exception werfen (`ValueError("verständlicher Text")`).
+   - Rückgabe: kleines `dict`. Lesende visuelle Tools können `VisualResult` aus `jira_agent/visual_output.py` liefern; siehe `jira_agent/tools/pdf_tools.py` und `docs/EXTENDING.md`. SDK-Läufe verwenden dafür `make_run_config()` aus `jira_agent/model_input.py`.
+   - Fehler als Exception werfen (`ValueError("verständlicher Text")`).
    - Bilder/Downloads: `url = ctx.files.put(name, mime, bytes)` und `{"markdown": f"![Titel]({url})"}` zurückgeben (siehe `output_tools.py`).
 
 4. **Jira nur über die Helfer** in `ctx.jira` (keine eigenen HTTP-Aufrufe, wenn ein Helfer passt):

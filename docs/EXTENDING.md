@@ -81,7 +81,25 @@ Bis zu vier zuletzt referenzierte Bilder und maximal 10 MB Bilddaten werden pro 
 
 `llm.supports_images: true` ist eine Konfigurationsangabe, kein automatischer Nachweis der Modellfähigkeit. Das tatsächliche Azure-Deployment und seine API-Version müssen Bild-Eingaben unterstützen. Für Textmodelle auf `false` setzen; dann werden Bild-Uploads abgewiesen. Bei einem eigenen Azure-Deployment gilt dieselbe Voraussetzung. Lokale Tests prüfen die tatsächlichen SDK-HTTP-Payloads gegen einen simulierten Azure-Endpunkt; die Erkennungsqualität muss im Ziel-Workspace getestet werden.
 
-Bilder sind Daten, keine Anweisungen oder Freigaben für Jira-Aktionen. Bildinhalte werden an das konfigurierte Modell übertragen und können wie andere Modell-Eingaben in MLflow-Traces erscheinen. Gescanntes PDF, OCR und vollständige Dateianalysen sind dadurch noch nicht implementiert.
+Bilder sind Daten, keine Anweisungen oder Freigaben für Jira-Aktionen. Bildinhalte werden an das konfigurierte Modell übertragen und können wie andere Modell-Eingaben in MLflow-Traces erscheinen. Visuelles PDF-Lesen und berechnete Tabellenanalysen werden im folgenden Abschnitt beschrieben.
+
+## Dokumente und Tabellen auswerten
+
+`read_uploaded_file` ist eine Vorschau, keine Berechnungsgrundlage. Bei PDFs liefern `start_page`, `max_pages`, `next_page` und `next_text_offset` einen fortsetzbaren Textauszug. Auch lange Einzel-Seiten lassen sich fortsetzen. `needs_visual_reading` markiert Seiten mit wenig/keinem extrahierbaren Text; daraus lässt sich nicht schließen, dass die Seite leer ist.
+
+`read_pdf_pages` rendert komplette Seiten mit der freigegebenen Bibliothek `pypdfium2`, einschließlich Scans, Text und Layout. Die Seiten werden als echte Bildinhalte an das vorhandene bildfähige Modell übergeben. Das ist visuelles Lesen durch das Modell, keine deterministische OCR oder garantierte Zeichenerkennung. Seitenzahlen und Unsicherheit bleiben Bestandteil der Antwort. Es kommt kein zusätzlicher Cloud-Dienst hinzu.
+
+Grenzen: PDF maximal 500 Seiten; 1–3 visuelle Seiten je Tool-Aufruf, maximal 6 Seiten und 10 MB Seitenbilddaten je Agenten-Anfrage. Längere Dokumente in weiteren Nachrichten fortsetzen. Die längste Bildkante beträgt maximal 1800 Pixel; Fotos mit zu großen PNG-Daten werden als JPEG kodiert. Sehr kleine Schrift kann unleserlich bleiben. Passwortgeschützte PDFs benötigen eine entsperrte Kopie. PDFium-Aufrufe sind im Prozess serialisiert und die nativen Ressourcen werden geschlossen.
+
+Für selbst gestartete SDK-Läufe `jira_agent.model_input.make_run_config()` verwenden. Der SDK-Hook `call_model_input_filter` lässt die Tool-Aufruf-/Ergebnis-Paare unverändert und übergibt gerenderte Tool-Bilder zusätzlich als multimodale Daten an Azure Chat Completions; der Standard-Converter würde Bilder in Tool-Ergebnissen sonst herausfiltern. Diese erzeugten Modell-Eingaben sind keine Nutzerfreigaben: Die Bestätigung prüft weiterhin nur die echte letzte Nutzernachricht. `VisualResult` ist für lesende Bild-Tools vorgesehen. Browser und wiederholte Chat-Historie erhalten über `public_output_item` nur Metadaten und geschützte Vorschaulinks, keine Base64-Blöcke. Für spätere Detailfragen können die Seiten erneut gerendert werden. Modell-Traces können Bildinhalte enthalten.
+
+`analyze_uploaded_table` verwendet das bereits mit MLflow installierte pandas. Es arbeitet über alle eingelesenen CSV-/Excel-Zeilen mit fest definierten Operationen: Profil, Filter, Sortierung und Aggregationen. Es gibt weder `eval`, frei ausgeführten Python-Code noch eine zusätzliche Datenbank. `size` zählt Zeilen einschließlich leerer Zellen, `count` nur nichtleere Werte. Die erste Zeile ist die Kopfzeile; leere/doppelte Namen werden mit dokumentierter Zuordnung eindeutig benannt. Über `columns`, `column_offset` und `max_columns` lassen sich breite Tabellen eingrenzen bzw. Profilspalten durchblättern.
+
+`number_format=auto` konvertiert nur eindeutige Ganzzahlen in CSV-Text. Für Dezimal-/Tausendertrennzeichen sind `de` oder `en` explizit zu wählen; bei Unklarheit soll der Agent fragen. Führende Null-Kennungen bleiben Text. Nicht vollständig numerische Spalten können nicht stillschweigend summiert werden. Berechnungen verwenden übliche Gleitkommaarithmetik, keine garantierte exakte Dezimalrechnung. Excel-Formeln werden nicht ausgeführt; fehlt ein gespeichertes Formel-Ergebnis, verlangt die Analyse eine in Excel neu berechnete Datei. Bei mehreren Blättern muss ein Blatt ausgewählt werden.
+
+Grenzen: 100.000 Datenzeilen, 200 Spalten und 2 Millionen Zellen; entpackte Excel-Dateien maximal 100 MB. Bei Überschreitung gibt es eine Fehlermeldung statt einer stillen Teilberechnung. `max_rows` begrenzt nur die Ergebnisvorschau. Diagramme enthalten maximal 50 Punkte und kennzeichnen ausgelassene/leere Werte. `export_uploaded_table` exportiert alle gefilterten/berechneten Ergebniszeilen innerhalb der Eingabegrenzen, unabhängig vom Vorschau-Limit. XLSX-Textzellen bleiben Text; potenzielle CSV-Formeln erhalten ein führendes Apostroph.
+
+Der Team-Skill `/datei-auswertung` verbindet diese Fähigkeiten zu einem wiederverwendbaren Ablauf.
 
 ## Jira-Verhalten und Grenzen
 

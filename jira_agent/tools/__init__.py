@@ -39,6 +39,9 @@ class ToolContext:
     files: Any = None                # FileSink des Nutzers für Diagramme/Exporte (oder None)
     uploads: Any = None              # UploadSink mit hochgeladenen Dateien (oder None, wenn keine)
     enabled_tools: list[str] | None = None  # None = alle registrierten Tools; Liste = explizite Auswahl
+    pdf_pages_read: int = 0          # Budget der visuellen PDF-Auslesung pro Agenten-Anfrage
+    pdf_bytes_sent: int = 0
+    vision: bool = False             # das konfigurierte Modell akzeptiert Bild-Eingaben
     selected_tables: list[str] = field(default_factory=list)
 
     def __repr__(self) -> str:      # keine Clients/Keys in Traces

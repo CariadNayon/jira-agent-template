@@ -55,19 +55,9 @@ def read_excel(data: bytes, max_rows: int) -> dict:
     return {"blaetter": sheets}
 
 
-def read_pdf(data: bytes) -> dict:
-    from pypdf import PdfReader
-
-    reader = PdfReader(io.BytesIO(data))
-    parts, size = [], 0
-    for i, page in enumerate(reader.pages):
-        text = page.extract_text() or ""
-        parts.append(f"--- Seite {i + 1} ---\n{text}")
-        size += len(text)
-        if size > _MAX_TEXT:
-            break
-    text = "\n".join(parts)
-    return {"seiten": len(reader.pages), "text": text[:_MAX_TEXT], "gekuerzt": len(text) > _MAX_TEXT}
+def read_pdf(data: bytes, start_page: int = 1, max_pages: int = 10, text_offset: int = 0) -> dict:
+    from jira_agent.pdf_data import read_pdf as read_pages
+    return read_pages(data,start_page,max_pages,text_offset)
 
 
 @tool(needs=["uploads"])
@@ -77,12 +67,15 @@ def list_uploaded_files(ctx: ToolContext) -> dict:
 
 
 @tool(needs=["uploads"])
-def read_uploaded_file(ctx: ToolContext, file_id: str, max_rows: int = 200) -> dict:
+def read_uploaded_file(ctx: ToolContext, file_id: str, max_rows: int = 200, start_page: int = 1, max_pages: int = 10, text_offset: int = 0) -> dict:
     """Liest Tabellen (CSV, Excel), Text und PDF-Text. Für PNG/JPEG/WebP werden nur Metadaten geliefert;
     die referenzierten Bilder stehen dem Modell direkt in der Benutzernachricht zur Verfügung.
 
     file_id: ID der Datei (siehe list_uploaded_files)
-    max_rows: maximale Zeilen je Tabelle (höchstens 1000)
+    max_rows: maximale Vorschau-Zeilen je Tabelle (höchstens 1000); für Berechnungen analyze_uploaded_table nutzen
+    start_page: erste PDF-Seite, beginnend bei 1
+    max_pages: PDF-Seiten je Aufruf, maximal 20; mit next_page weiterblättern
+    text_offset: Textposition innerhalb der Startseite; next_text_offset aus vorherigem Ergebnis nutzen
     """
     f = ctx.uploads.get(file_id)
     if f is None:
@@ -97,7 +90,7 @@ def read_uploaded_file(ctx: ToolContext, file_id: str, max_rows: int = 200) -> d
     elif ext in (".xlsx", ".xlsm"):
         out.update(read_excel(f.data, max_rows))
     elif ext == ".pdf":
-        out.update(read_pdf(f.data))
+        out.update(read_pdf(f.data,start_page,max_pages,text_offset))
     elif ext in _TEXT_TYPES or f.mime.startswith("text/"):
         text = _decode(f.data)
         out.update({"text": text[:_MAX_TEXT], "gekuerzt": len(text) > _MAX_TEXT})

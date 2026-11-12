@@ -1,4 +1,5 @@
 import logging
+from agent_server.history import public_output_item
 from typing import AsyncGenerator, AsyncIterator, Optional
 from uuid import uuid4
 
@@ -55,5 +56,5 @@ async def process_agent_stream_events(
         elif event.type == "run_item_stream_event" and event.item.type == "tool_call_output_item":
             yield ResponsesAgentStreamEvent(
                 type="response.output_item.done",
-                item=event.item.to_input_item(),
+                item=public_output_item(event.item.to_input_item()),
             )

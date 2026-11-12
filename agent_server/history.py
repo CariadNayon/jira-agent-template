@@ -45,3 +45,14 @@ def normalize_history_items(messages: list[dict]) -> list[dict]:
         else:
             normalized.append(m)
     return normalized
+
+
+def public_output_item(item: dict) -> dict:
+    """Keep image bytes in the active SDK run, not in browser tool cards/replayed history."""
+    output = item.get("output")
+    if item.get("type") == "function_call_output" and isinstance(output,list):
+        if any(isinstance(part,dict) and part.get("type") == "input_image" for part in output):
+            text = next((p.get("text", "") for p in output
+                         if isinstance(p,dict) and p.get("type") == "input_text"), "Seitenbilder verarbeitet.")
+            return {**item,"output":text}
+    return item

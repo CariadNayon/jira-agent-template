@@ -8,6 +8,8 @@ from __future__ import annotations
 import csv
 import io
 import re
+import math
+import threading
 from typing import Literal
 
 from jira_agent import CFG
@@ -17,6 +19,7 @@ from jira_agent.tools.jira_tools import EXPORT_MAX_RESULTS, search_issues
 
 _EXPORT_ROWS = int(CFG["data"]["export_row_limit"])
 _MAX_POINTS = 50
+_CHART_LOCK = threading.RLock()
 _NAME_RE = re.compile(r"[^A-Za-z0-9_\-]+")
 
 
@@ -27,7 +30,8 @@ def _safe_name(name: str, ext: str) -> str:
 
 def _num(value):
     try:
-        return float(value)
+        number = float(value)
+        return number if math.isfinite(number) else None
     except (TypeError, ValueError):
         return None
 
@@ -53,50 +57,52 @@ def create_chart(ctx: ToolContext, sql: str, chart_type: Literal["bar", "line", 
     res = _sql_result(ctx, sql)
     if "error" in res:
         return res
+    return chart_from_result(ctx.files,res,chart_type,x,y,title)
+
+
+def chart_from_result(files, res: dict, chart_type: str, x: str, y: str, title: str = "") -> dict:
+    """Shared renderer; Matplotlib is serialized and every figure is closed on failure."""
     cols = res["columns"]
     if x not in cols or y not in cols:
         raise ValueError(f"Spalten {x!r}/{y!r} nicht im Ergebnis. Vorhanden: {cols}")
     xi, yi = cols.index(x), cols.index(y)
     points = [(row[xi], _num(row[yi])) for row in res["rows"] if _num(row[yi]) is not None]
+    ignored = len(res["rows"])-len(points)
     if not points:
-        raise ValueError(f"Spalte {y!r} enthält keine Zahlen.")
+        raise ValueError(f"Spalte {y!r} enthält keine endlichen Zahlen.")
     cut = len(points) > _MAX_POINTS
     points = points[:_MAX_POINTS]
-
-    import matplotlib
-    matplotlib.use("Agg")
-    import matplotlib.pyplot as plt
-
     labels, values = [str(p[0]) for p in points], [p[1] for p in points]
-    fig, ax = plt.subplots(figsize=(8, 4.5), dpi=120)
-    if chart_type == "bar":
-        ax.bar(labels, values)
-    elif chart_type == "line":
-        ax.plot(labels, values, marker="o")
-    elif chart_type == "scatter":
-        xs = [_num(p[0]) for p in points]
-        if any(v is None for v in xs):
+    with _CHART_LOCK:
+        import matplotlib
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+        fig, ax = plt.subplots(figsize=(8, 4.5), dpi=120)
+        try:
+            if chart_type == "bar": ax.bar(labels,values)
+            elif chart_type == "line": ax.plot(labels,values,marker="o")
+            elif chart_type == "scatter":
+                xs = [_num(p[0]) for p in points]
+                if any(v is None for v in xs):
+                    raise ValueError(f"Für scatter muss {x!r} numerisch sein.")
+                ax.scatter(xs,values)
+            elif chart_type == "pie":
+                if any(v < 0 for v in values) or sum(values) <= 0:
+                    raise ValueError("Tortendiagramme benötigen nichtnegative Werte und eine positive Summe.")
+                ax.pie(values,labels=labels,autopct="%1.0f%%")
+            else: raise ValueError("chart_type muss bar, line, pie oder scatter sein.")
+            ax.set_title(title or f"{y} nach {x}")
+            if chart_type != "pie":
+                ax.set_xlabel(x); ax.set_ylabel(y)
+                if chart_type in ("bar","line"):
+                    plt.setp(ax.get_xticklabels(),rotation=45,ha="right")
+            fig.tight_layout()
+            buf=io.BytesIO(); fig.savefig(buf,format="png")
+        finally:
             plt.close(fig)
-            raise ValueError(f"Für scatter muss {x!r} numerisch sein.")
-        ax.scatter(xs, values)
-    elif chart_type == "pie":
-        ax.pie(values, labels=labels, autopct="%1.0f%%")
-    else:
-        plt.close(fig)
-        raise ValueError("chart_type muss bar, line, pie oder scatter sein.")
-    ax.set_title(title or f"{y} nach {x}")
-    if chart_type != "pie":
-        ax.set_xlabel(x)
-        ax.set_ylabel(y)
-        if chart_type in ("bar", "line"):
-            plt.setp(ax.get_xticklabels(), rotation=45, ha="right")
-    fig.tight_layout()
-    buf = io.BytesIO()
-    fig.savefig(buf, format="png")
-    plt.close(fig)
-    url = ctx.files.put(_safe_name(title or "diagramm", "png"), "image/png", buf.getvalue())
-    return {"markdown": f"![{title or 'Diagramm'}]({url})", "punkte": len(points),
-            "gekuerzt": cut or bool(res.get("truncated"))}
+    url=files.put(_safe_name(title or "diagramm","png"),"image/png",buf.getvalue())
+    return {"markdown":f"![{title or 'Diagramm'}]({url})","punkte":len(points),
+            "gekuerzt":cut or bool(res.get("truncated")),"ausgelassene_werte":ignored}
 
 
 @tool(needs=["files"])
@@ -125,20 +131,37 @@ def export_file(ctx: ToolContext, source: Literal["sql", "jql"], query: str, for
     else:
         raise ValueError("source muss sql oder jql sein.")
 
+    return export_result(ctx.files,columns,rows,format,filename or f"export_{source}")
+
+
+def export_result(files, columns: list, rows: list, format: str, filename: str) -> dict:
+    """Create download files from actual results, shared by warehouse/Jira/upload tools."""
     if format == "csv":
         text = io.StringIO()
         writer = csv.writer(text, delimiter=";")   # Semikolon: öffnet sich in deutschem Excel korrekt
-        writer.writerow(columns)
-        writer.writerows(rows)
+        def csv_value(value):
+            if isinstance(value,str) and value.lstrip().startswith(('=','+','-','@')):
+                return "'"+value
+            return value
+        writer.writerow([csv_value(v) for v in columns])
+        writer.writerows([csv_value(v) for v in row] for row in rows)
         data, mime = text.getvalue().encode("utf-8-sig"), "text/csv"
     elif format == "xlsx":
         from openpyxl import Workbook
+        from openpyxl.cell import WriteOnlyCell
 
-        wb = Workbook()
-        ws = wb.active
-        ws.append(columns)
+        wb = Workbook(write_only=True)
+        ws = wb.create_sheet("Data")
+        def cells(row):
+            result=[]
+            for value in row:
+                cell=WriteOnlyCell(ws,value="" if value is None else value)
+                if isinstance(value,str): cell.data_type="s"
+                result.append(cell)
+            return result
+        ws.append(cells(columns))
         for row in rows:
-            ws.append(["" if v is None else v for v in row])
+            ws.append(cells(row))
         buf = io.BytesIO()
         wb.save(buf)
         data = buf.getvalue()
@@ -146,6 +169,7 @@ def export_file(ctx: ToolContext, source: Literal["sql", "jql"], query: str, for
     else:
         raise ValueError("format muss csv oder xlsx sein.")
 
-    name = _safe_name(filename or f"export_{source}", format)
-    url = ctx.files.put(name, mime, data)
-    return {"markdown": f"[{name} herunterladen]({url})", "zeilen": len(rows)}
+    name = _safe_name(filename, format)
+    url = files.put(name, mime, data)
+    return {"markdown": f"[{name} herunterladen]({url})", "zeilen": len(rows),
+            "hint": "Textzellen bleiben Text; CSV-Formelpräfixe werden mit einem Apostroph entschärft."}
