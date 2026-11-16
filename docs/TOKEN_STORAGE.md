@@ -2,6 +2,8 @@
 
 Die Option **Remember for my account** speichert den Jira-Token verschlüsselt im persönlichen Databricks-Workspace-Ordner. Sie gilt für das Databricks-Konto und funktioniert damit auch nach einem App-Neustart und auf einem anderen Browser. Es werden keine Tokens in Local Storage, IndexedDB, Browser-Cache oder Cookies abgelegt.
 
+**Ohne Einrichtung:** Die Token-Felder (Banner und Zahnrad → Connections) sind normale Anmeldeformulare mit unsichtbarem Benutzernamen `jira-token`. Edge und Chrome bieten nach **Connect** an, den Token im Passwortmanager zu speichern, und füllen das Feld beim nächsten Mal aus. Danach nur noch **Connect** klicken. Die Speicherung liegt vollständig beim Browser bzw. seinem Passwortmanager; die App legt nichts im Browser-Speicher ab und erfährt nicht, ob der Token gespeichert wurde. Auf fremden oder geteilten Rechnern das Speichern ablehnen.
+
 ## Einmalige Einrichtung durch den App-Verantwortlichen
 
 Ein eigener Verschlüsselungsschlüssel ist erforderlich. Ohne ihn bleibt die Funktion deaktiviert und die bisherige Sitzungsablage funktioniert weiter. Der Azure-OpenAI-Key wird nicht als Verschlüsselungsschlüssel verwendet.

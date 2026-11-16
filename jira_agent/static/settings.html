@@ -47,7 +47,7 @@
   <div class="hint">Leave blank to use the default name from your Jira account. Click Save to apply.</div>
   <p class="hint" style="margin-top:16px">Azure keys are kept in memory for this session. You can optionally remember your Jira token encrypted for your account.</p>
   <div id="jiraStatus"></div>
-  <form id="jiraForm" method="post" action="/jira/api/credentials">
+  <form id="jiraForm" method="post" novalidate>
     <input type="text" name="username" value="jira-token" autocomplete="username" readonly tabindex="-1" aria-hidden="true" style="position:absolute;width:1px;height:1px;opacity:0;border:0;padding:0">
     <label for="jiraToken">Jira Personal Access Token</label>
     <input id="jiraToken" name="password" type="password" autocomplete="current-password">
@@ -284,12 +284,20 @@
     state.selected.sort(); renderSelected(); msg("ucMsg", "Added. Click Save to apply.", true);
   });
 
+  function offerPasswordSave(token) {
+    try {
+      if (window.PasswordCredential && navigator.credentials && navigator.credentials.store) {
+        navigator.credentials.store(new PasswordCredential({ id: "jira-token", name: "Jira token", password: token })).catch(function () {});
+      }
+    } catch (e) { /* optional */ }
+  }
   $("jiraForm").addEventListener("submit", async function (event) {
     event.preventDefault();
     var token = $("jiraToken").value.trim();
     if (!token) return msg("jiraMsg", "Please enter a token.", false);
     msg("jiraMsg", "Checking …");
     try { var r = await api("/jira/api/credentials", { method: "POST", body: JSON.stringify({ jira_token: token, remember_jira: $("rememberJira").checked && !$("rememberJira").disabled }) });
+      offerPasswordSave(token);
       $("jiraToken").value = ""; msg("jiraMsg", "Signed in as " + r.jira_user, true); await load(); notifyPage(); }
     catch (e) { msg("jiraMsg", e.message, false); }
   });

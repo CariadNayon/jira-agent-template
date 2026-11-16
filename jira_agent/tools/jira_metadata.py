@@ -24,7 +24,7 @@ def summarize_fields(fields: list[tuple[str, dict]], field_id: str, value_query:
     if field_id:
         match = next((meta for key, meta in fields if key == field_id), None)
         if match is None:
-            raise ValueError(f"Feld {field_id} is unavailable here.")
+            raise ValueError(f"Field {field_id} is unavailable here.")
         return {"fields": [field_summary(field_id, match, value_query, value_offset)]}
     return {"fields": [{"id": key, "name": meta.get("name"), "required": meta.get("required", False),
                         "schema": meta.get("schema", {}), "has_default": meta.get("hasDefaultValue", False),

@@ -203,7 +203,7 @@
   banner.id = "jira-banner";
   banner.innerHTML =
     '<b>Connect Jira:</b><span>Enter your Jira Personal Access Token.</span>' +
-    '<form data-token-form method="post" action="/jira/api/credentials">' +
+    '<form data-token-form method="post" novalidate>' +
     '<input class="jira-user" type="text" name="username" value="jira-token" autocomplete="username" readonly tabindex="-1" aria-hidden="true">' +
     '<input type="password" name="password" autocomplete="current-password" placeholder="Paste your Jira token here …" aria-label="Jira Personal Access Token">' +
     '<button type="submit">Connect</button></form><a data-help>Where can I find my token?</a>' +
@@ -222,6 +222,14 @@
     if (show) { banner.className = ""; banner.querySelector("b").textContent = "Connect Jira:"; banner.style.display = "flex"; }
     else if (!banner.classList.contains("ok")) banner.style.display = "none";
   }
+  /* Ohne Seitenwechsel erkennen Browser das Absenden oft nicht; deshalb das Speichern im Passwortmanager (mit Rückfrage des Browsers) ausdrücklich anbieten. */
+  function offerPasswordSave(token) {
+    try {
+      if (window.PasswordCredential && navigator.credentials && navigator.credentials.store) {
+        navigator.credentials.store(new PasswordCredential({ id: "jira-token", name: "Jira token", password: token })).catch(function () {});
+      }
+    } catch (e) { /* optional */ }
+  }
   function connectJira() {
     var token = bannerInput.value.trim();
     if (!token) { bannerMsg.textContent = "Please enter your token first."; return; }
@@ -232,6 +240,7 @@
     }).then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
       .then(function (res) {
         if (!res.ok) { bannerMsg.textContent = (res.d && res.d.detail) || "Connection failed."; return; }
+        offerPasswordSave(token);
         bannerInput.value = "";
         banner.className = "ok";
         banner.querySelector("b").textContent = "Jira connected";

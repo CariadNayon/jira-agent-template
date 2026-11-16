@@ -55,7 +55,7 @@ def export_issues(jira: JiraClient, jql: str, limit: int, start_at: int = 0, tim
             reason='Jira did not return the requested results page.';break
         page=data.get('issues',[])
         if not page:
-            if offset<total:reason='Jira lieferte vorzeitig eine leere Ergebnisseite.'
+            if offset<total:reason='Jira returned an empty results page too early.'
             break
         keys=[i.get('key') for i in page]
         if None in keys or len(set(keys))!=len(keys) or seen.intersection(keys):

@@ -100,7 +100,7 @@ def chart_from_result(files, res: dict, chart_type: str, x: str, y: str, title: 
         finally:
             plt.close(fig)
     url=files.put(_safe_name(title or "chart","png"),"image/png",buf.getvalue())
-    return {"markdown":f"![{title or 'Diagramm'}]({url})","punkte":len(points),
+    return {"markdown":f"![{title or 'Chart'}]({url})","punkte":len(points),
             "gekuerzt":cut or bool(res.get("truncated")),"ausgelassene_werte":ignored}
 
 
@@ -175,5 +175,5 @@ def export_result(files, columns: list, rows: list, format: str, filename: str) 
 
     name = _safe_name(filename, format)
     url = files.put(name, mime, data)
-    return {"markdown": f"[{name} herunterladen]({url})", "zeilen": len(rows),
+    return {"markdown": f"[Download {name}]({url})", "zeilen": len(rows),
             "hint": "Text cells remain text; CSV formula prefixes are escaped with a leading apostrophe."}

@@ -33,7 +33,7 @@ def image_info(name: str, data: bytes) -> dict:
                 raise ValueError('Image content does not match the file extension.')
             width, height = img.size
             if width * height > _MAX_IMAGE_PIXELS:
-                raise ValueError('Bild hat zu viele Pixel. Maximal 20 Millionen Pixel pro Bild.')
+                raise ValueError('Image has too many pixels. Maximum: 20 million pixels per image.')
             if getattr(img, 'n_frames', 1) != 1:
                 raise ValueError('Animated images are not supported. Please upload a still image.')
             img.verify()

@@ -124,7 +124,7 @@ def load_table(file, sheet: str = '', number_format: str = 'auto') -> TableData:
             formulas = load_workbook(io.BytesIO(file.data), read_only=True, data_only=False)
             ws, fs = workbook[selected_sheet], formulas[selected_sheet]
             if ws.max_column and ws.max_column > _MAX_COLUMNS:
-                raise ValueError(f'Zu viele columns. Maximal {_MAX_COLUMNS}.')
+                raise ValueError(f'Too many columns. Maximum: {_MAX_COLUMNS}.')
             # Do not trust stale worksheet dimensions in third-party exports.
             ws.reset_dimensions()
             fs.reset_dimensions()
@@ -184,7 +184,7 @@ def _column(frame, name):
 def apply_filters(frame, filters: list[dict] | None):
     import pandas as pd
     if len(filters or []) > 20:
-        raise ValueError('Maximal 20 Filter.')
+        raise ValueError('At most 20 filters are allowed.')
     for condition in filters or []:
         if not isinstance(condition,dict):
             raise ValueError('Filters must be objects.')

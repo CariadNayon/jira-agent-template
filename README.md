@@ -43,6 +43,8 @@ Jira-Zugangsdaten ausschließlich im Feld **Jira verbinden** oder unter Zahnrad 
 
 Mit **Remember for my account** kann der Jira-Token optional verschlüsselt pro Databricks-Nutzer gespeichert werden. Nach erneuter Anmeldung wird er wiederhergestellt und gegen Jira geprüft. **Disconnect and forget saved token** entfernt die gespeicherte Kopie und die Sitzungsschlüssel. Einmalige Einrichtung des separaten App-Secrets und die genaue Ablage: [TOKEN_STORAGE.md](docs/TOKEN_STORAGE.md).
 
+Ohne diese Einrichtung kann der **Passwortmanager des Browsers** (Edge/Chrome) den Token speichern und beim nächsten Mal ins Feld einfügen. Dafür sind die Token-Felder normale Anmeldeformulare. Die App selbst legt weiterhin nichts im Browser-Speicher ab.
+
 ## Wo was liegt
 
 | Hier änderst du | |
@@ -79,6 +81,8 @@ Außerdem setzt es die User-Scopes `sql:restricted-query`, `catalog.*:read` und 
 
 Die GitHub Action [checks.yml](.github/workflows/checks.yml) prüft Änderungen auf `main` automatisch: Python 3.11/3.12, Offline-Abnahme und der vollständige Build des angepassten Chat-Frontends. Die manuell gestartete [Deploy-Action](.github/workflows/deploy.yml) führt diese Prüfungen vor `uv run deploy --target prod` aus. Reale Modell-, Anmelde- und Berechtigungstests sind separat beschrieben: [Abnahme](docs/ACCEPTANCE.md).
 
+In dieser Installation wird nach einem Push nicht über die GitHub Deploy-Action, sondern über einen Databricks Git-Ordner bzw. Job deployt; der `push`-Trigger in `deploy.yml` bleibt deshalb ausgeschaltet. Ob ein Stand live ist, zeigt die Versionsnummer oben links in der App. Deshalb bei jeder Änderung `project.version` in `pyproject.toml` erhöhen. Auf diesem Weg laufen die Prüfungen aus `checks.yml` nicht vor dem Deploy: vorher lokal `uv run pytest tests -q` ausführen.
+
 ## Sicherheit und Betrieb
 
 Gemeinsame Laufzeitoptimierungen und Auswertung langsamer Anfragen: [Performance](docs/PERFORMANCE.md). HTTP-Verbindungen werden wiederverwendet, der Modellkontext richtet sich nach den verfügbaren Fähigkeiten und jeder Lauf protokolliert getrennte Modell-, Tool- und Jira-Zeiten.
@@ -113,3 +117,5 @@ Lokal: `curl -X POST http://localhost:8000/invocations -H "Content-Type: applica
 | Stream meldet 200, aber Fehler im Inhalt | normal: Fehler beim Streaming kommen im Stream selbst |
 | HTTP 302 beim API-Aufruf | OAuth-Token statt PAT verwenden |
 | Warnung `exclude-newer = "7 days"` | `uv self update` |
+| Meldung `Error code: 429 … exceeded token rate limit` | Das Azure-Kontingent (Tokens pro Minute) des Deployments ist ausgeschöpft. Die App wiederholt Modellaufrufe bis zu 6-mal und beachtet dabei die Wartezeit von Azure. Hilft das nicht: kurz warten, das Kontingent im Azure-Portal erhöhen oder unter Zahnrad → Model einen eigenen Azure-Key bzw. ein anderes Deployment verwenden. Der Chat wiederholt nach einem Fehler nie selbst, damit keine Jira-Änderung doppelt läuft. |
+| Nachrichtenfeld lässt sich ohne Text absenden | behoben ab v0.2.3 (Prüfung wird beim App-Start in die Chat-Oberfläche eingesetzt) |
