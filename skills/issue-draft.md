@@ -2,7 +2,7 @@
 name: issue-draft
 description: "Prepares a Jira issue and creates it only after approval"
 ---
-1. Clarify the desired project. Use jira_list_projects if the project key is missing or unclear. Never invent a project.
+1. Clarify the desired project. If the project key is missing or unclear, search with jira_list_projects and a query (name or key part); never list all projects. Never invent a project.
 2. Get available issue types with jira_list_issue_types. Clarify the appropriate type with the user and load required fields with jira_get_create_fields.
 3. Collect the summary, description and all required values. Get allowed field values with jira_get_create_fields and field_id. Ask for missing required information; never invent it.
 4. If the user wants to be the assignee, identify them with jira_get_myself and use @me. Resolve other assignees with jira_find_user and ask if ambiguous.

@@ -228,3 +228,18 @@ def test_runtime_builds_agent_with_selected_tools_and_user_context(monkeypatch):
     assert context.tool_ctx.jira is jira
     assert 'connected as jira.user' in agent.instructions
     assert 'Actually available tools: jira_create_issue, jira_get_myself' in agent.instructions
+
+
+def test_project_list_is_searchable_and_paged_so_large_jira_instances_fit():
+    import json
+    jira = FakeJira(issues={f'PRJ{i:04d}-1': {} for i in range(1500)})
+    first = run_tool('jira_list_projects', jira=jira)
+    assert first['total'] == 1500 and len(first['projects']) == 30
+    assert first['truncated'] and first['next_start_at'] == 30
+    assert len(json.dumps(first)) < 20000
+    second = run_tool('jira_list_projects', jira=jira, start_at=first['next_start_at'], max_results=500)
+    assert len(second['projects']) == 100 and second['projects'][0]['key'] == 'PRJ0030'
+    found = run_tool('jira_list_projects', jira=jira, query='prj0123')
+    assert [p['key'] for p in found['projects']] == ['PRJ0123'] and not found['truncated']
+    assert run_tool('jira_list_projects', jira=jira, query='nothing')['projects'] == []
+    assert run_tool('jira_list_projects', jira=jira, start_at=-1)['error'] == 'ValueError'

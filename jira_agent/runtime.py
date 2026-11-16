@@ -73,7 +73,7 @@ JIRA_GUIDANCE = """- Show ticket: jira_get_issue for a known key; use a one-resu
 - For the current user's assignment use @me, resolved by the client from the personal Jira token.
   Use jira_get_myself if the actual identity is needed; never guess a username or use the Databricks email.
   For searches, assignee=@me uses currentUser() without a separate identity lookup.
-- Before creation, clarify project (jira_list_projects), type (jira_list_issue_types) and required values
+- Before creation, clarify project (jira_list_projects with a query; there can be thousands of projects, so never list all), type (jira_list_issue_types) and required values
   (jira_get_create_fields). Ask for missing values, including for test issues. Do not translate Jira values.
 - Request tokens only when disconnected, through Connect Jira or Settings → Connections, never in chat."""
 

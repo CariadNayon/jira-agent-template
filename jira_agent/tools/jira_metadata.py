@@ -41,9 +41,22 @@ def jira_get_myself(ctx: ToolContext) -> dict:
 
 
 @tool(needs=["jira"])
-def jira_list_projects(ctx: ToolContext) -> dict:
-    """Lists projects visible to the Jira user and their project keys."""
-    return {"projects": ctx.jira.projects()}
+def jira_list_projects(ctx: ToolContext, query: str = "", max_results: int = 30, start_at: int = 0) -> dict:
+    """Lists projects visible to the Jira user with their project keys. There can be thousands, so search
+    with query (matches key or name) instead of listing everything; continue with next_start_at if truncated.
+
+    query: optional text to find in the project key or name, case-insensitive
+    max_results: projects per call, 1 to 100
+    start_at: zero-based position; use next_start_at from the previous result"""
+    if start_at < 0:
+        raise ValueError("start_at must not be negative.")
+    needle = (query or "").strip().casefold()
+    projects = [p for p in ctx.jira.projects()
+                if not needle or needle in str(p.get("key") or "").casefold() or needle in str(p.get("name") or "").casefold()]
+    page = projects[start_at:start_at + max(1, min(int(max_results), 100))]
+    end = start_at + len(page)
+    return {"projects": page, "total": len(projects), "start_at": start_at,
+            "truncated": end < len(projects), "next_start_at": end if end < len(projects) else None}
 
 
 @tool(needs=["jira"])
