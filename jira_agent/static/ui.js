@@ -50,6 +50,8 @@
     '#jira-banner input{flex:1;min-width:200px;padding:6px 8px;border:1px solid #d9b45a;border-radius:6px;font:inherit;background:#fff;color:#222}',
     '#jira-banner input[type="checkbox"]{flex:none;min-width:0;width:auto;margin-right:4px;padding:0}',
     '#jira-banner label{font-size:12px;display:flex;align-items:center}',
+    '#jira-banner .remember-help{width:100%;font-size:12px}',
+    '#jira-banner .remember-help[hidden]{display:none}',
     '#jira-banner.ok input,#jira-banner.ok button,#jira-banner.ok a,#jira-banner.ok label,#jira-banner.ok>span{display:none}',
     '#jira-banner button{padding:6px 12px;border-radius:6px;border:0;background:#1b5fd1;color:#fff;cursor:pointer;font:inherit}',
     '#jira-banner a{color:inherit;text-decoration:underline;cursor:pointer}',
@@ -153,7 +155,7 @@
 
   function loadMe() {
     fetch("/jira/api/me", { credentials: "same-origin" })
-      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (r) { if (!r.ok) throw new Error("Status unavailable"); return r.json(); })
       .then(function (d) {
         if (!d) return;
         if (d.agent_name) agentName = String(d.agent_name);
@@ -163,11 +165,18 @@
         bannerRemember.checked = !!d.has_saved_jira_token;
         bannerRemember.parentNode.title = d.remember_jira_available
           ? "Reconnect automatically for up to " + (d.remember_jira_days || 30) + " days after signing in."
-          : "Remembering tokens is not available. Ask your app administrator to enable it.";
+          : (d.remember_jira_message || "Remember is not set up yet.");
+        bannerRememberReason.textContent = d.remember_jira_message || "Remember is not set up yet. ";
+        bannerRememberHelp.hidden = !!d.remember_jira_available;
         if (d.jira_connection_message && !d.has_jira_token) bannerMsg.textContent = d.jira_connection_message;
         showBanner(!d.has_jira_token);
       })
-      .catch(function () {});
+      .catch(function () {
+        bannerRemember.disabled = true;
+        bannerRememberReason.textContent = "Unable to check Remember availability. Reload the app or sign in again. ";
+        bannerRememberHelp.hidden = false;
+        showBanner(true);
+      });
   }
 
   /* ---------- Hilfen ---------- */
@@ -194,9 +203,13 @@
     '<b>Connect Jira:</b><span>Enter your Jira Personal Access Token.</span>' +
     '<input type="password" autocomplete="off" placeholder="Paste your Jira token here …" aria-label="Jira Personal Access Token">' +
     '<button type="button">Connect</button><a data-help>Where can I find my token?</a>' +
-    '<label><input type="checkbox" data-remember disabled>Remember for my account</label><div class="msg"></div>';
+    '<label><input type="checkbox" data-remember disabled>Remember for my account</label>' +
+    '<div class="remember-help"><span data-remember-reason role="status">Checking whether Remember is available … </span> ' +
+    '<a data-remember-setup href="/jira/guide#remember-tokens-setup">Setup help</a></div><div class="msg"></div>';
   var bannerInput = banner.querySelector("input");
   var bannerRemember = banner.querySelector("[data-remember]");
+  var bannerRememberHelp = banner.querySelector(".remember-help");
+  var bannerRememberReason = banner.querySelector("[data-remember-reason]");
   var bannerMsg = banner.querySelector(".msg");
   var bannerWanted = false;
   function showBanner(show) {
@@ -228,6 +241,9 @@
   banner.querySelector("button").addEventListener("click", connectJira);
   bannerInput.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); connectJira(); } });
   banner.querySelector("[data-help]").addEventListener("click", function () { openPanel("/jira/guide#jira-token"); });
+  banner.querySelector("[data-remember-setup]").addEventListener("click", function (event) {
+    event.preventDefault(); openPanel("/jira/guide#remember-tokens-setup");
+  });
 
   /* ---------- Dateien hochladen: Büroklammer, Strg+V, Drag & Drop ---------- */
   var fileInput = document.createElement("input");

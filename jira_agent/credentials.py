@@ -31,6 +31,20 @@ def cipher():
         return None
 
 
+def remember_availability(user_token: str | None) -> dict:
+    """Explain prerequisites without revealing any secret or credential value."""
+    if not os.environ.get(_KEY_ENV, '').strip():
+        return {'available': False, 'reason': 'missing_encryption_key',
+                'message': 'Remember is not set up yet. An app administrator must configure the encryption secret.'}
+    if cipher() is None:
+        return {'available': False, 'reason': 'invalid_encryption_key',
+                'message': 'Remember is misconfigured. An app administrator must check the encryption secret.'}
+    if not user_token:
+        return {'available': False, 'reason': 'missing_user_authorization',
+                'message': 'Sign in again and allow access to your personal workspace to use Remember.'}
+    return {'available': True, 'reason': '', 'message': ''}
+
+
 def remember_days() -> int:
     days = int(CFG['session'].get('remember_jira_days', 30))
     if not 1 <= days <= 365:

@@ -25,7 +25,7 @@ from jira_agent.settings_store import SettingsStore, sanitize
 from jira_agent.skills import MAX_PERSONAL, PersonalSkillStore, check_skill, render_skill, team_skills
 from jira_agent.state import UploadSink, get_file, logout, user_state
 from jira_agent.uploads import validate_upload
-from jira_agent.credentials import (JiraTokenStore, cipher, remember_days,
+from jira_agent.credentials import (JiraTokenStore, cipher, remember_availability, remember_days,
                                     restore_jira, set_jira_identity)
 
 _STATIC = Path(__file__).parent / "static"
@@ -59,6 +59,7 @@ async def me(request: Request, response: Response):
     state = user_state(email)
     await asyncio.to_thread(restore_jira, state, email, token)
     settings = await asyncio.to_thread(load_settings, state, email, token)
+    remembering = remember_availability(token)
     return {
         "email": email,
         "app_version": __version__,
@@ -67,7 +68,9 @@ async def me(request: Request, response: Response):
         "agent_name_default": default_agent_name(state.jira_display_name),
         "has_jira_token": bool(state.creds.get("jira_token")),
         "has_azure_key": bool(state.creds.get("azure_key")),
-        "remember_jira_available": cipher() is not None and bool(token),
+        "remember_jira_available": remembering['available'],
+        "remember_jira_reason": remembering['reason'],
+        "remember_jira_message": remembering['message'],
         "remember_jira_days": remember_days(),
         "has_saved_jira_token": state.jira_saved,
         "jira_saved_until": state.jira_saved_until,

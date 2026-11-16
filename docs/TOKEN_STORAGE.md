@@ -6,6 +6,8 @@ Die Option **Remember for my account** speichert den Jira-Token verschlüsselt i
 
 Ein eigener Verschlüsselungsschlüssel ist erforderlich. Ohne ihn bleibt die Funktion deaktiviert und die bisherige Sitzungsablage funktioniert weiter. Der Azure-OpenAI-Key wird nicht als Verschlüsselungsschlüssel verwendet.
 
+Neben der gesperrten Checkbox zeigt die App, ob das Verschlüsselungs-Secret fehlt, ungültig ist oder die Benutzeranmeldung erneuert werden muss. **Setup help** öffnet direkt den passenden Abschnitt der Anleitung. Ein Code-Update allein legt das Secret nicht an und aktiviert die Funktion nicht.
+
 1. Einen eingeschränkten Secret Scope verwenden, standardmäßig `jira-agent-credentials`, und darin einen **separaten** Eintrag `jira-agent-token-encryption-key` anlegen. Er muss einen von `cryptography.fernet.Fernet.generate_key()` erzeugten Schlüssel enthalten. Die Bibliothek ist bereits über MLflow installiert; es kommt kein neues Paket hinzu. Schlüsselwerte weder ins Repo noch in Chat, Logs oder Terminalausgaben schreiben. Beispiel für einen Databricks-verwalteten Scope, ausgeführt durch einen berechtigten Administrator:
 
    ```python

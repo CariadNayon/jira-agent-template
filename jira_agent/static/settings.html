@@ -50,7 +50,8 @@
   <label for="jiraToken">Jira Personal Access Token</label>
   <input id="jiraToken" type="password" autocomplete="off">
   <label style="font-weight:normal"><input id="rememberJira" type="checkbox" disabled> <span id="rememberJiraLabel">Remember for my account</span></label>
-  <div class="hint" id="rememberJiraHint">Remembering tokens is not configured for this app.</div>
+  <div class="hint"><span id="rememberJiraHint" role="status">Checking whether Remember is available …</span>
+    <a id="rememberJiraSetup" href="/jira/guide#remember-tokens-setup">Setup help</a></div>
   <div class="row"><button class="btn primary" id="connectJira">Connect to Jira</button><span id="jiraMsg"></span></div>
   <label for="azureKey">Your Azure OpenAI key (optional)</label>
   <input id="azureKey" type="password" autocomplete="off">
@@ -208,7 +209,9 @@
     $("rememberJiraLabel").textContent = "Remember for " + (me.remember_jira_days || 30) + " days";
     $("rememberJiraHint").textContent = me.remember_jira_available
       ? "Reconnect automatically after signing in. The token is stored encrypted in your personal workspace folder."
-      : "Remembering tokens is not available for this connection. Ask your app administrator to enable it.";
+      : (me.remember_jira_message || "Remember is not set up yet. Open Setup help for the required steps.");
+    $("rememberJiraSetup").hidden = !!me.remember_jira_available;
+    $("rememberJira").title = me.remember_jira_message || "";
     if (me.has_saved_jira_token && me.jira_saved_until) {
       $("rememberJiraHint").textContent += " Remembered until " + new Date(me.jira_saved_until * 1000).toLocaleDateString("en-GB") + ".";
     }
@@ -328,7 +331,12 @@
       $("rulesText").value = me.settings.rules || "";
       $("agentName").value = me.settings.agent_name || "";
       $("agentName").placeholder = me.agent_name_default;
-    } catch (e) { msg("saveMsg", "Unable to load settings: " + e.message, false); }
+    } catch (e) {
+      $("rememberJira").disabled = true;
+      $("rememberJiraHint").textContent = "Unable to check Remember availability. Reload the app or sign in again.";
+      $("rememberJiraSetup").hidden = false;
+      msg("saveMsg", "Unable to load settings: " + e.message, false);
+    }
   }
   load();
 })();

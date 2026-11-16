@@ -106,6 +106,8 @@ def test_remember_encrypts_and_restores_after_memory_session_is_lost(storage):
     logout(OWNER)  # Simulate a restart/session expiry, not the explicit Forget endpoint.
     status = client.get('/jira/api/me').json()
     assert status['has_jira_token'] and status['has_saved_jira_token']
+    assert status['remember_jira_available']
+    assert status['remember_jira_reason'] == status['remember_jira_message'] == ''
     assert status['jira_user'] == 'jira.user | Jira User'
     assert PAT not in json.dumps(status)
     assert calls == ['Bearer '+PAT, 'Bearer '+PAT]
@@ -230,7 +232,11 @@ def test_failed_save_and_failed_forget_do_not_claim_success_or_leak_details(stor
 def test_missing_key_disables_remember_but_keeps_session_connection(storage, monkeypatch, key):
     client, _, disk, _, _ = storage
     monkeypatch.setenv('JIRA_TOKEN_ENCRYPTION_KEY', key)
-    assert not client.get('/jira/api/me').json()['remember_jira_available']
+    status = client.get('/jira/api/me').json()
+    assert not status['remember_jira_available']
+    assert status['remember_jira_reason'] == ('invalid_encryption_key' if key else 'missing_encryption_key')
+    assert 'encryption secret' in status['remember_jira_message']
+    assert not key or key not in json.dumps(status)
     assert connect(client).status_code == 400
     assert connect(client, remember=False).status_code == 200
     assert not disk
@@ -238,6 +244,10 @@ def test_missing_key_disables_remember_but_keeps_session_connection(storage, mon
 
 def test_no_databricks_user_authorization_cannot_save(storage):
     client, _, disk, _, _ = storage
+    status = client.get('/jira/api/me', headers={'x-forwarded-access-token':''}).json()
+    assert not status['remember_jira_available']
+    assert status['remember_jira_reason'] == 'missing_user_authorization'
+    assert 'Sign in again' in status['remember_jira_message']
     response = client.post('/jira/api/credentials', headers={'x-forwarded-access-token':''},
                            json={'jira_token':PAT,'remember_jira':True})
     assert response.status_code == 400 and not disk
