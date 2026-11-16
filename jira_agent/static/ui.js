@@ -33,14 +33,18 @@
     '.jira-hdr-btn{height:32px;display:inline-flex;align-items:center;gap:6px;padding:0 10px;border-radius:8px;cursor:pointer;' +
       'border:1px solid rgba(128,128,128,.35);background:transparent;color:inherit;font-size:13px}',
     '.jira-hdr-btn:hover{background:rgba(128,128,128,.12)}',
-    '#jira-guide-btn{order:1}#jira-gear{order:3;padding:0 8px}',
+    '#jira-auto-btn{order:0}#jira-guide-btn{order:1}#jira-gear{order:3;padding:0 8px}',
+    '.jira-hdr-btn.on{background:#fff3cd;border-color:#d9b45a}',
     '.jira-fixed{position:fixed;top:10px;z-index:2147483000;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.15)}',
-    '#jira-gear.jira-fixed{right:14px}#jira-guide-btn.jira-fixed{right:60px}',
+    '#jira-gear.jira-fixed{right:14px}#jira-guide-btn.jira-fixed{right:60px}#jira-auto-btn.jira-fixed{right:150px}',
     '#jira-overlay{position:fixed;inset:0;z-index:2147483001;background:rgba(0,0,0,.35);display:none;align-items:center;justify-content:center}',
     '#jira-panel{width:min(820px,94vw);height:min(680px,90vh);background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 8px 30px rgba(0,0,0,.25)}',
     '#jira-panel iframe{border:0;width:100%;height:100%}',
-    '.jira-confirm{margin:6px 0;padding:6px 12px;border-radius:6px;border:0;background:#1b5fd1;color:#fff;cursor:pointer;font-size:13px}',
+    '.jira-confirm-row{display:flex;flex-wrap:wrap;gap:8px;margin:6px 0}',
+    '.jira-confirm{margin:0;padding:6px 12px;border-radius:6px;border:0;background:#1b5fd1;color:#fff;cursor:pointer;font-size:13px}',
     '.jira-confirm:hover{background:#174fb0}',
+    '.jira-confirm.jira-decline{background:transparent;color:inherit;border:1px solid rgba(128,128,128,.5)}',
+    '.jira-confirm.jira-decline:hover{background:rgba(128,128,128,.15)}',
     /* Jira-Banner */
     '#jira-banner{position:fixed;top:64px;left:50%;transform:translateX(-50%);z-index:60;width:min(720px,92vw);box-sizing:border-box;' +
       'display:none;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 12px;border-radius:10px;font-size:13px;' +
@@ -117,6 +121,8 @@
     function () { openPanel("/jira/guide"); });
   var gearBtn = makeButton("jira-gear", GEAR_SVG, "Settings (name, Jira, model, data sources, rules)",
     function () { openPanel("/jira/settings"); });
+  var autoBtn = makeButton("jira-auto-btn", "<span>Auto-approve: off</span>",
+    "Approve the agent's proposed Jira changes automatically (limited, off by default)", function () {});
   var titleEl = document.createElement("span");
   titleEl.id = "jira-agent-title";
   var versionEl = document.createElement("span");
@@ -133,13 +139,13 @@
     var header = document.querySelector("header.sticky") || document.querySelector("header");
     var right = header && header.querySelector(".ml-auto");
     if (right) {
-      [guideBtn, gearBtn].forEach(function (b) {
+      [autoBtn, guideBtn, gearBtn].forEach(function (b) {
         b.classList.remove("jira-fixed");
         if (b.parentNode !== right) right.appendChild(b);
       });
       if (brandEl.parentNode !== header) header.insertBefore(brandEl, header.firstChild);
     } else {
-      [guideBtn, gearBtn].forEach(function (b) {
+      [autoBtn, guideBtn, gearBtn].forEach(function (b) {
         b.classList.add("jira-fixed");
         if (b.parentNode !== document.body) document.body.appendChild(b);
       });
@@ -402,8 +408,26 @@
   document.addEventListener("click", function (e) { if (!popup.contains(e.target)) hidePopup(); }, true);
 
   /* ---------- Bestätigungs-Button für "ja <CODE>" ---------- */
-  var CODE_RE = /\b(?:yes|ja)\s+([A-F0-9]{6})\b/;
-  var used = {};
+  var CODE_RE = /\b(?:yes|ja)\s+([A-F0-9]{6})\b/g;
+  var used = {}, autoPending = {};
+  var AUTO_LIMIT = 5;
+  var autoLeft = 0;
+  try { autoLeft = Math.max(0, parseInt(sessionStorage.getItem("jiraAutoApprove") || "0", 10) || 0); } catch (e) { autoLeft = 0; }
+  function setAuto(n) {
+    autoLeft = Math.max(0, n);
+    try { sessionStorage.setItem("jiraAutoApprove", String(autoLeft)); } catch (e) { /* optional */ }
+    autoBtn.classList.toggle("on", autoLeft > 0);
+    autoBtn.querySelector("span").textContent = autoLeft > 0 ? "Auto-approve: " + autoLeft + " left" : "Auto-approve: off";
+  }
+  autoBtn.addEventListener("click", function () {
+    if (autoLeft > 0) { setAuto(0); showToast("Auto-approve turned off.", 3000); return; }
+    if (confirm("Turn on auto-approve for the next " + AUTO_LIMIT + " actions in this browser tab?\n\n" +
+        "The agent will then change Jira without asking you each time. Text in Jira tickets or files could trick the agent " +
+        "into proposing unwanted changes. It turns off by itself afterwards, and when you close the tab.")) {
+      setAuto(AUTO_LIMIT); showToast("Auto-approve is on for the next " + AUTO_LIMIT + " actions.", 4000);
+    }
+  });
+  setAuto(autoLeft);
   function sendText(text) {
     var ta = document.querySelector("textarea");
     if (!ta) return;
@@ -419,30 +443,72 @@
       else ta.focus();
     }, 80);
   }
+  /* Nur die letzte Antwort des Agenten kann einen gültigen Vorschlag enthalten (Codes sind einmalig, 10 Minuten gültig). */
+  function latestAssistant() {
+    var list = document.querySelectorAll('[data-testid="message-user"],[data-testid="message-assistant"]');
+    var last = list[list.length - 1];
+    return last && last.getAttribute("data-testid") === "message-assistant" ? last : null;
+  }
+  function approve(code) {
+    used[code] = true;
+    document.querySelectorAll(".jira-confirm-row").forEach(function (x) { x.remove(); });
+    sendText("yes " + code);
+  }
+  function autoApprove(code) {
+    if (used[code] || autoPending[code] || autoLeft <= 0) return;
+    autoPending[code] = true;
+    showToast("Auto-approving yes " + code + " …", 2500);
+    setTimeout(function () {
+      if (autoLeft <= 0 || used[code] || !latestAssistant()) { delete autoPending[code]; return; }
+      setAuto(autoLeft - 1);
+      approve(code);
+      if (autoLeft === 0) showToast("Auto-approve limit reached and turned off.", 5000);
+    }, 800);
+  }
   function scanCodes() {
-    var nodes = document.querySelectorAll("main p, main li, main strong, main code");
-    for (var i = 0; i < nodes.length; i++) {
-      var el = nodes[i];
-      if (el.closest("#jira-overlay, textarea, form") || el.dataset.jiraScanned) continue;
-      var m = CODE_RE.exec(el.textContent || "");
-      if (!m) continue;
-      var code = m[1];
-      el.dataset.jiraScanned = "1";
-      /* nur bei Vorschlägen des Agenten, nicht bei der kurzen Nutzer-Antwort; je Code nur ein Button */
-      if (used[code] || (el.textContent || "").trim().length < 15 ||
-          document.querySelector('.jira-confirm[data-code="' + code + '"]')) continue;
+    var msg = latestAssistant();
+    document.querySelectorAll(".jira-confirm-row").forEach(function (row) { if (!msg || !msg.contains(row)) row.remove(); });
+    if (!msg || document.querySelector('[data-testid="stop-button"]')) return;
+    var contents = msg.querySelectorAll('[data-testid="message-content"]');
+    if (!contents.length) return;
+    /* Textknoten einzeln lesen: textContent klebt benachbarte Absätze ohne Trennzeichen zusammen ("…FBB98AThis…"). */
+    var pieces = [];
+    Array.prototype.forEach.call(contents, function (c) {
+      var walker = document.createTreeWalker(c, NodeFilter.SHOW_TEXT);
+      while (walker.nextNode()) pieces.push(walker.currentNode.nodeValue);
+    });
+    var text = pieces.join("\n");
+    var codes = [], m;
+    CODE_RE.lastIndex = 0;
+    while ((m = CODE_RE.exec(text))) if (codes.indexOf(m[1]) < 0 && !used[m[1]]) codes.push(m[1]);
+    var row = msg.querySelector(".jira-confirm-row");
+    if (!codes.length) { if (row) row.remove(); return; }
+    if (autoLeft > 0) { autoApprove(codes[0]); return; }
+    if (!row) {
+      row = document.createElement("div");
+      row.className = "jira-confirm-row";
+      contents[contents.length - 1].parentNode.insertAdjacentElement("afterend", row);
+    }
+    if (row.dataset.codes === codes.join(",")) return;
+    row.dataset.codes = codes.join(",");
+    row.textContent = "";
+    codes.forEach(function (code) {
       var b = document.createElement("button");
       b.className = "jira-confirm";
       b.dataset.code = code;
       b.textContent = "Approve action (yes " + code + ")";
-      b.addEventListener("click", function (ev) {
-        var c = ev.currentTarget.dataset.code;
-        used[c] = true;
-        document.querySelectorAll('.jira-confirm[data-code="' + c + '"]').forEach(function (x) { x.remove(); });
-        sendText("yes " + c);
-      });
-      el.insertAdjacentElement("afterend", b);
-    }
+      b.addEventListener("click", function () { approve(code); });
+      row.appendChild(b);
+    });
+    var decline = document.createElement("button");
+    decline.className = "jira-confirm jira-decline";
+    decline.textContent = "Decline";
+    decline.addEventListener("click", function () {
+      codes.forEach(function (c) { used[c] = true; });
+      row.remove();
+      sendText("No, do not make this change.");
+    });
+    row.appendChild(decline);
   }
 
   /* ---------- Start und Beobachtung ---------- */
