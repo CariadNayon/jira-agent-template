@@ -149,6 +149,8 @@ def test_real_sdk_sends_image_to_azure_for_both_agent_paths(client,monkeypatch,s
     from agents import Runner, RunConfig, OpenAIChatCompletionsModel
     from openai import AsyncAzureOpenAI
     import jira_agent.runtime as runtime
+    from jira_agent.performance import Performance, PerformanceHooks
+    from agent_server.utils import process_agent_stream_events
 
     f=upload(client)
     captured=[]
@@ -173,13 +175,20 @@ def test_real_sdk_sends_image_to_azure_for_both_agent_paths(client,monkeypatch,s
             monkeypatch.setattr(runtime,'build_model',lambda *a:model)
             messages=[{'role':'user','content':'Was siehst du? '+f['reference']}]
             agent,ctx=runtime.prepare({'x-forwarded-email':EMAIL},messages,'chat-a')
-            options=dict(context=ctx,run_config=RunConfig(tracing_disabled=True))
+            metrics=Performance()
+            hooks=PerformanceHooks(metrics)
+            options=dict(context=ctx,run_config=RunConfig(tracing_disabled=True),hooks=hooks)
             if stream:
                 result=Runner.run_streamed(agent,messages,**options)
-                async for _ in result.stream_events(): pass
+                async for event in process_agent_stream_events(result.stream_events()):
+                    hooks.observe_stream(event)
+                assert metrics.counters['first_event_ms'] >= 0
+                assert metrics.counters['first_text_ms'] >= metrics.counters['first_event_ms']
             else:
                 result=await Runner.run(agent,messages,**options)
             assert result.final_output == 'Simulierte Antwort'
+            assert metrics.counters['llm_calls'] == 1
+            assert metrics.counters['llm_ms'] >= 0
     asyncio.run(check())
     user=next(m for m in captured[0]['messages'] if m['role']=='user')
     image=next(p for p in user['content'] if p['type']=='image_url')

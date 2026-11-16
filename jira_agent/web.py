@@ -321,6 +321,8 @@ def inject_ui(html: bytes) -> bytes:
 
 def install(app: FastAPI) -> None:
     """Registriert die Routen und fügt ui.js (Zahnrad, Anleitung, Layout) in die HTML-Seiten der Chat-UI ein."""
+    from jira_agent.connections import install_connection_lifecycle
+    install_connection_lifecycle(app)
     # Routen einzeln registrieren statt app.include_router(router): Neuere FastAPI-Versionen legen
     # eingebundene Router gebündelt ab (ohne path_regex), dann erkennt die Chat-Proxy-Middleware von
     # MLflow sie nicht und antwortet mit "Not found".

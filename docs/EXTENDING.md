@@ -124,6 +124,8 @@ Der Team-Skill `/file-analysis` verbindet diese Fähigkeiten zu einem wiederverw
 
 ## Prüfen und bereitstellen
 
+Der gemeinsame Laufzeit-Unterbau misst Modellrunden und externe Aufrufe und verwendet HTTP-Verbindungspools. Neue Provider/Clients sollten diese Mechanismen wiederverwenden und eigene Ressourcen am Ende eines Laufs schließen. Einzelheiten, Messfelder und Grenzen stehen in [PERFORMANCE.md](PERFORMANCE.md).
+
 Jira-Suchen liefern `truncated` und `next_start_at`, wenn weitere Treffer vorhanden sind. JQL-Exporte lesen alle Seiten bis `data.export_row_limit` (standardmäßig 5.000 Tickets pro Datei), auch wenn Jira kleinere Seiten zurückgibt. Ohne eigene Sortierung wird `ORDER BY key ASC` ergänzt. Nach etwa 60 Sekunden wird vor der nächsten Seite abgebrochen; ein bereits laufender HTTP-Aufruf kann länger dauern. Begrenzte oder widersprüchliche Ergebnisse erhalten eine Warnung. Mit `next_start_at` lässt sich eine weitere Datei erzeugen. Jira stellt keinen konsistenten Snapshot bereit (`snapshot: false`); Änderungen während eines Exports können trotz stabiler Gesamtzahl Ergebnisse verschieben.
 
 Beim ersten Start lädt die App die getestete Databricks-Frontend-Version aus `scripts/frontend_source.py`. Laufzeit und CI verwenden dieselben Anpassungen für Identität, Uploads, Wiederholungen und Tool-Status. `npm ci` installiert die Versionen aus dem zugehörigen Upstream-Lockfile. Ein vorhandener Ordner `e2e-chatbot-app-next` bleibt erhalten; bei eigenen Änderungen müssen die Anpassungen und der Build erneut geprüft werden. Beim Aktualisieren der Upstream-Version zuerst die Build-Prüfung ausführen. Tool-Ergebnisse mit Fehlern werden als Fehler angezeigt, ausstehende Bestätigungen als solche.

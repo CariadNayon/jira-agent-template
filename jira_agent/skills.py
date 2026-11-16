@@ -19,6 +19,8 @@ from __future__ import annotations
 import io
 import json
 import re
+import copy
+from functools import lru_cache
 from pathlib import Path
 
 import yaml
@@ -63,11 +65,18 @@ def render_skill(skill: dict) -> str:
     return f"---\n{head}---\n{skill['anleitung']}\n"
 
 
+@lru_cache(maxsize=128)
+def _parsed_team_file(path: str, modified_ns: int, size: int) -> dict:
+    file = Path(path)
+    return parse_skill(file.read_text(encoding='utf-8'), file.stem)
+
+
 def team_skills(directory: Path = TEAM_DIR) -> dict[str, dict]:
     skills = {}
     for path in sorted(directory.glob("*.md")) if directory.exists() else []:
         try:
-            s = parse_skill(path.read_text(encoding="utf-8"), path.stem)
+            stat = path.stat()
+            s = copy.deepcopy(_parsed_team_file(str(path.resolve()), stat.st_mtime_ns, stat.st_size))
         except ValueError:
             continue  # fehlerhafte Datei überspringen statt die App zu blockieren (Tests prüfen das Format)
         skills[s["name"]] = {**s, "quelle": "team"}

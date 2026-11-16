@@ -28,6 +28,7 @@ import pkgutil
 import re
 import types
 import typing
+from functools import lru_cache
 from dataclasses import dataclass, field
 from typing import Any, Callable, Literal, Union
 
@@ -148,6 +149,7 @@ def tool(description: str | Callable | None = None, parameters: dict | None = No
     return deco
 
 
+@lru_cache(maxsize=1)
 def load_tools() -> dict[str, Tool]:
     """Importiert alle Module in jira_agent/tools (außer solchen, die mit _ beginnen)."""
     for mod in pkgutil.iter_modules(__path__):

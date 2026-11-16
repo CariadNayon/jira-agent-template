@@ -46,9 +46,14 @@ def check_azure_endpoint(endpoint: str) -> str:
 def _azure_model(api_key: str, endpoint: str, api_version: str, deployment: str):
     from agents import OpenAIChatCompletionsModel
     from openai import AsyncAzureOpenAI
+    from jira_agent.connections import azure_http_client
 
-    client = AsyncAzureOpenAI(api_key=api_key, api_version=api_version, azure_endpoint=endpoint)
-    return OpenAIChatCompletionsModel(model=deployment, openai_client=client)
+    http_client = azure_http_client()
+    client = AsyncAzureOpenAI(api_key=api_key, api_version=api_version, azure_endpoint=endpoint,
+                             **({'http_client': http_client} if http_client is not None else {}))
+    model = OpenAIChatCompletionsModel(model=deployment, openai_client=client)
+    model._jira_agent_client = client  # This factory owns one SDK client per run.
+    return model
 
 
 _central_key: dict[str, object] = {}

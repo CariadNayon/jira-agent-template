@@ -26,8 +26,13 @@ class JiraClient:
         return f"JiraClient(base_url={self.base_url!r})"
 
     def request(self, method: str, path: str, **kwargs) -> requests.Response:
-        return requests.request(method, f"{self.base_url}{path}", headers=self._headers,
-                                timeout=self._timeout, **kwargs)
+        from jira_agent.connections import jira_session
+        from jira_agent.performance import measure_jira, record_http_status
+        with measure_jira():
+            response = jira_session().request(method, f"{self.base_url}{path}", headers=self._headers,
+                                              timeout=self._timeout, **kwargs)
+            record_http_status('jira', response.status_code)
+            return response
 
     def myself(self) -> dict:
         try:
