@@ -8,8 +8,23 @@ runtime.py   – baut pro Anfrage den Agenten mit den Daten des angemeldeten Nut
 web.py       – Endpunkte für Zahnrad (Keys, Einstellungen, Unity Catalog) und Dateien
 """
 from pathlib import Path
+from importlib.metadata import PackageNotFoundError, version
+import tomllib
 
 import yaml
+
+
+def _app_version() -> str:
+    project = Path(__file__).parent.parent / 'pyproject.toml'
+    if project.is_file():
+        return tomllib.loads(project.read_text(encoding='utf-8'))['project']['version']
+    try:
+        return version('jira-agent')
+    except PackageNotFoundError:
+        return 'dev'
+
+
+__version__ = _app_version()
 
 CFG = yaml.safe_load((Path(__file__).parent / "config.yaml").read_text(encoding="utf-8"))
 

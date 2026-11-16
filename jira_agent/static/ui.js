@@ -11,6 +11,7 @@
   window.__jiraUi = true;
 
   var agentName = "Jira Agent";
+  var appVersion = String(window.__jiraAppVersion || "");
 
   /* ---------- Stil ---------- */
   var style = document.createElement("style");
@@ -25,7 +26,10 @@
     'header .ml-auto > button.md\\:hidden{display:inline-flex!important;order:2;margin-left:0!important}',
     /* Inhalt ohne Seitenleiste links etwas einrücken */
     '@media (min-width:768px){main > div.md\\:mr-2{margin-left:.5rem}}',
-    '#jira-agent-title{font-size:16px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:45vw}',
+    '#jira-agent-brand{display:inline-flex;align-items:baseline;gap:7px;min-width:0;max-width:45vw}',
+    '#jira-agent-title{font-size:16px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}',
+    '#jira-app-version{font-size:11px;font-weight:400;opacity:.65;white-space:nowrap;flex-shrink:0;font-variant-numeric:tabular-nums}',
+    '#jira-app-version[hidden]{display:none}',
     '.jira-hdr-btn{height:32px;display:inline-flex;align-items:center;gap:6px;padding:0 10px;border-radius:8px;cursor:pointer;' +
       'border:1px solid rgba(128,128,128,.35);background:transparent;color:inherit;font-size:13px}',
     '.jira-hdr-btn:hover{background:rgba(128,128,128,.12)}',
@@ -111,6 +115,12 @@
     function () { openPanel("/jira/settings"); });
   var titleEl = document.createElement("span");
   titleEl.id = "jira-agent-title";
+  var versionEl = document.createElement("span");
+  versionEl.id = "jira-app-version";
+  var brandEl = document.createElement("span");
+  brandEl.id = "jira-agent-brand";
+  brandEl.appendChild(titleEl);
+  brandEl.appendChild(versionEl);
 
   /* ---------- Kopfzeile einrichten (idempotent, läuft nach jedem React-Neuaufbau) ---------- */
   function ensureLayout() {
@@ -123,7 +133,7 @@
         b.classList.remove("jira-fixed");
         if (b.parentNode !== right) right.appendChild(b);
       });
-      if (titleEl.parentNode !== header) header.insertBefore(titleEl, header.firstChild);
+      if (brandEl.parentNode !== header) header.insertBefore(brandEl, header.firstChild);
     } else {
       [guideBtn, gearBtn].forEach(function (b) {
         b.classList.add("jira-fixed");
@@ -131,6 +141,13 @@
       });
     }
     if (titleEl.textContent !== agentName) titleEl.textContent = agentName;
+    var label = appVersion ? "v" + appVersion : "";
+    if (versionEl.textContent !== label) {
+      versionEl.textContent = label;
+      versionEl.title = "App version " + appVersion;
+      versionEl.setAttribute("aria-label", "App version " + appVersion);
+    }
+    versionEl.hidden = !appVersion;
     if (document.title !== agentName) document.title = agentName;
   }
 
@@ -139,7 +156,9 @@
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (d) {
         if (!d) return;
-        if (d.agent_name) { agentName = String(d.agent_name); ensureLayout(); }
+        if (d.agent_name) agentName = String(d.agent_name);
+        if (d.app_version) appVersion = String(d.app_version);
+        ensureLayout();
         bannerRemember.disabled = !d.remember_jira_available;
         bannerRemember.checked = !!d.has_saved_jira_token;
         bannerRemember.parentNode.title = d.remember_jira_available

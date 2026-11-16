@@ -7,6 +7,7 @@ nicht über /invocations bzw. /responses – und tauchen dadurch nie in Traces a
 from __future__ import annotations
 
 import asyncio
+import json
 import re
 from pathlib import Path
 from urllib.parse import quote
@@ -15,7 +16,7 @@ from fastapi import APIRouter, FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, Response
 from pydantic import BaseModel
 
-from jira_agent import CFG
+from jira_agent import CFG, __version__
 from jira_agent.jira_client import JiraClient, JiraError
 from jira_agent.llm import PROVIDERS, check_azure_endpoint
 from jira_agent.runtime import (DEFAULT_SETTINGS, agent_name, all_skills, default_agent_name, identity,
@@ -60,6 +61,7 @@ async def me(request: Request, response: Response):
     settings = await asyncio.to_thread(load_settings, state, email, token)
     return {
         "email": email,
+        "app_version": __version__,
         "jira_user": state.jira_user,
         "agent_name": agent_name(state, settings),
         "agent_name_default": default_agent_name(state.jira_display_name),
@@ -355,7 +357,10 @@ async def guide_page():
 
 @router.get("/static/ui.js")
 async def ui_js():
-    return Response((_STATIC / "ui.js").read_text(encoding="utf-8"), media_type="application/javascript",
+    # Include the running backend's version immediately, without another API request.
+    source = 'window.__jiraAppVersion = ' + json.dumps(__version__) + ';\n'
+    source += (_STATIC / "ui.js").read_text(encoding="utf-8")
+    return Response(source, media_type="application/javascript",
                     headers={"Cache-Control": "no-cache"})
 
 

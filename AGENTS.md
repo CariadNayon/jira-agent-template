@@ -20,6 +20,8 @@ Dieses Repo ist eine **fertige Databricks App**: ein persönlicher Jira- und Dat
 
 Regeln, Name, Modell und Tabellen ändern Nutzer **ohne Code** über das Zahnrad in der App – darauf hinweisen, wenn das reicht.
 
+Die App-Version steht ausschließlich in `pyproject.toml` unter `project.version` und wird dezent neben dem Agentennamen angezeigt. Bei Änderungen an der Anwendung vor dem Push nach `main` die Version erhöhen: PATCH für Korrekturen, MINOR für neue Funktionen. Keine zweite Versionsnummer im Frontend pflegen.
+
 ## Wo was liegt
 
 **Hier wird erweitert:**

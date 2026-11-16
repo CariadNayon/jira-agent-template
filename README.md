@@ -2,6 +2,8 @@
 
 Persönlicher Jira- und Daten-Assistent als fertige Databricks App, gebaut mit OpenAI Agents SDK, MLflow `AgentServer` und Azure OpenAI.
 
+Die laufende App-Version steht dezent oben links neben dem Agentennamen. Zentrale Quelle ist `project.version` in `pyproject.toml`; sie wird mit jedem Release erhöht und vom Backend an die Oberfläche übergeben.
+
 **Was der Agent kann**
 - **Jira** (mit dem persönlichen Token des Nutzers): Tickets suchen, erstellen und bearbeiten; Benutzer, Projekte, Tickettypen und Pflichtfelder ermitteln; Bearbeiter, Status und Priorität setzen; kommentieren, Labels setzen, Tickets verknüpfen und Arbeitszeit buchen. Jede Änderung braucht die Bestätigung „yes <CODE>“.
 - **Daten** (mit den Rechten des Nutzers): freigegebene Unity-Catalog-Tabellen beschreiben und per `SELECT` über das SQL Warehouse abfragen.
