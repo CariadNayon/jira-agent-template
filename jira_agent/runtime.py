@@ -105,7 +105,7 @@ def capability_guidance(names: set[str]) -> str:
 
 
 def default_agent_name(display_name: str | None) -> str:
-    """'Lenz, Nayon' -> 'Nayons Jira Agent', 'Klaus Meier' -> 'Klaus’ Jira Agent', ohne Namen -> 'Jira Agent'."""
+    """'Lenz, Nayon' -> 'Nayon’s Jira Agent', 'Klaus Meier' -> 'Klaus’ Jira Agent', ohne Namen -> 'Jira Agent'."""
     name = re.sub(r"\(.*?\)", "", display_name or "").strip()
     first = name.split(",", 1)[1].strip() if "," in name else name
     first = first.split()[0] if first.split() else ""

@@ -38,8 +38,16 @@ def read_table_text(text: str, max_rows: int) -> dict:
 
 
 def read_excel(data: bytes, max_rows: int) -> dict:
-    from openpyxl import load_workbook
+    import zipfile
 
+    from openpyxl import load_workbook
+    from jira_agent.table_data import check_xlsx_size
+
+    try:
+        with zipfile.ZipFile(io.BytesIO(data)) as archive:
+            check_xlsx_size(archive)
+    except zipfile.BadZipFile:
+        raise ValueError("The Excel file is damaged or unreadable.") from None
     wb = load_workbook(io.BytesIO(data), read_only=True, data_only=True)
     sheets = {}
     for ws in wb.worksheets[:10]:

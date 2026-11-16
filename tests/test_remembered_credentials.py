@@ -298,6 +298,24 @@ def test_forget_works_even_if_encryption_key_is_lost(storage, monkeypatch):
     assert not disk
 
 
+def test_forget_without_remember_is_not_blocked_by_workspace_errors(storage, monkeypatch):
+    client, clients, _, _, _ = storage
+    assert connect(client, remember=False).status_code == 200
+    monkeypatch.delenv('JIRA_TOKEN_ENCRYPTION_KEY')
+    clients[OWNER].workspace.fail_delete = True
+    response = client.delete('/jira/api/credentials')
+    assert response.status_code == 200 and not response.json()['saved_token_deleted']
+    assert not user_state(OWNER).creds
+
+
+def test_forget_still_reports_failure_when_a_saved_copy_exists(storage):
+    client, clients, disk, _, _ = storage
+    connect(client)
+    clients[OWNER].workspace.fail_delete = True
+    assert client.delete('/jira/api/credentials').status_code == 502
+    assert disk
+
+
 def test_workspace_client_cannot_write_to_another_users_home(storage):
     client, _, disk, _, _ = storage
     response = client.post('/jira/api/credentials', headers={'x-forwarded-email':OTHER},

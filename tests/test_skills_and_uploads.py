@@ -111,6 +111,32 @@ def test_upload_endpoint(client):
     assert client.post("/jira/api/upload?name=x.csv", content=b"x", headers={"x-forwarded-email": ""}).status_code == 401
 
 
+def test_upload_limit_applies_to_chunked_bodies_without_content_length(client):
+    def chunks():
+        for _ in range(21):
+            yield b"x" * (1024 * 1024)
+    r = client.post("/jira/api/upload?name=big.csv", content=chunks(), headers={"content-type": "text/csv"})
+    assert r.status_code == 413
+    assert "big.csv" not in [u["name"] for u in client.get("/jira/api/uploads").json()]
+
+
+def test_excel_zip_bomb_is_rejected_before_reading(monkeypatch):
+    import io
+    import zipfile
+
+    import jira_agent.table_data as table_data
+    from jira_agent.tools.upload_tools import read_excel
+
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("xl/big.xml", b"0" * (2 * 1024 * 1024))
+    monkeypatch.setattr(table_data, "_MAX_XLSX_BYTES", 1024 * 1024)
+    with pytest.raises(ValueError, match="too large"):
+        read_excel(buffer.getvalue(), 10)
+    with pytest.raises(ValueError, match="damaged"):
+        read_excel(b"not a zip", 10)
+
+
 def test_skill_endpoints(client):
     assert client.put("/jira/api/skills/triage", json={"beschreibung": "x", "anleitung": "y"}).status_code == 400
     r = client.put("/jira/api/skills/mein-skill", json={"beschreibung": "Meins", "anleitung": "1. Tu was"})

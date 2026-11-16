@@ -26,6 +26,12 @@ class TableData:
     warnings: list[str]
 
 
+def check_xlsx_size(archive: zipfile.ZipFile) -> None:
+    """Reject Excel files that expand to an unreasonable size (zip bombs)."""
+    if sum(x.file_size for x in archive.infolist()) > _MAX_XLSX_BYTES:
+        raise ValueError('The uncompressed Excel file is too large (maximum 100 MB).')
+
+
 def json_value(value):
     import pandas as pd  # existing MLflow dependency
     if value is None or pd.isna(value):
@@ -106,8 +112,7 @@ def load_table(file, sheet: str = '', number_format: str = 'auto') -> TableData:
             formula_iterator = None
         elif ext in ('.xlsx', '.xlsm'):
             with zipfile.ZipFile(io.BytesIO(file.data)) as archive:
-                if sum(x.file_size for x in archive.infolist()) > _MAX_XLSX_BYTES:
-                    raise ValueError('The uncompressed Excel file is too large (maximum 100 MB).')
+                check_xlsx_size(archive)
             workbook = load_workbook(io.BytesIO(file.data), read_only=True, data_only=True)
             if not workbook.sheetnames:
                 raise ValueError('The Excel file has no worksheets.')

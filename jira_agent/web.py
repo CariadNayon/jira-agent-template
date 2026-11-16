@@ -150,7 +150,9 @@ async def delete_credentials(request: Request, response: Response):
                     JiraTokenStore(_client(user_token), email).delete()
                     removed = True
                 except Exception:
-                    raise HTTPException(502, 'The saved Jira token could not be deleted. Please try again.') from None
+                    # Ohne Remember-Funktion ist die Löschung nur ein Aufräumversuch und darf das Abmelden nicht blockieren.
+                    if cipher() is not None or state.jira_saved:
+                        raise HTTPException(502, 'The saved Jira token could not be deleted. Please try again.') from None
             elif state.jira_saved:
                 raise HTTPException(403, 'Sign in again to forget the saved Jira token.')
             state.creds.clear()
@@ -238,11 +240,14 @@ async def upload(name: str, request: Request, chat_id: str | None = None):
     email, _ = _who(request)
     if int(request.headers.get("content-length") or 0) > _MAX_UPLOAD:
         raise HTTPException(413, "File too large (max. 20 MB).")
-    data = await request.body()
+    data = bytearray()
+    async for chunk in request.stream():   # auch ohne Content-Length begrenzen
+        data += chunk
+        if len(data) > _MAX_UPLOAD:
+            raise HTTPException(413, "File too large (max. 20 MB).")
+    data = bytes(data)
     if not data:
         raise HTTPException(400, "Empty file.")
-    if len(data) > _MAX_UPLOAD:
-        raise HTTPException(413, "File too large (max. 20 MB).")
     clean = _UPLOAD_NAME_RE.sub("_", Path(name).name).strip()[:100] or "datei"
     mime = (request.headers.get("content-type") or "application/octet-stream").split(";")[0]
     if chat_id is not None and not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", chat_id):
