@@ -25,5 +25,6 @@ agent:
     - Explain proposed changes clearly and perform them only after approval.
 
 session:
+  remember_jira_days: 30                # optionale verschlüsselte Ablage; benötigt App-Secret
   credentials_ttl_hours: 8               # Keys verfallen spätestens so lange nach Sitzungsbeginn (nur im Speicher)
   files_ttl_minutes: 60                  # erzeugte Diagramme/Exporte

@@ -44,6 +44,9 @@
     '#jira-banner.ok{background:#e8f5e9;color:#1b5e20;border-color:#a5d6a7}',
     '#jira-banner b{margin-right:4px}',
     '#jira-banner input{flex:1;min-width:200px;padding:6px 8px;border:1px solid #d9b45a;border-radius:6px;font:inherit;background:#fff;color:#222}',
+    '#jira-banner input[type="checkbox"]{flex:none;min-width:0;width:auto;margin-right:4px;padding:0}',
+    '#jira-banner label{font-size:12px;display:flex;align-items:center}',
+    '#jira-banner.ok input,#jira-banner.ok button,#jira-banner.ok a,#jira-banner.ok label,#jira-banner.ok>span{display:none}',
     '#jira-banner button{padding:6px 12px;border-radius:6px;border:0;background:#1b5fd1;color:#fff;cursor:pointer;font:inherit}',
     '#jira-banner a{color:inherit;text-decoration:underline;cursor:pointer}',
     '#jira-banner .msg{width:100%;font-size:12px}',
@@ -137,6 +140,12 @@
       .then(function (d) {
         if (!d) return;
         if (d.agent_name) { agentName = String(d.agent_name); ensureLayout(); }
+        bannerRemember.disabled = !d.remember_jira_available;
+        bannerRemember.checked = !!d.has_saved_jira_token;
+        bannerRemember.parentNode.title = d.remember_jira_available
+          ? "Reconnect automatically for up to " + (d.remember_jira_days || 30) + " days after signing in."
+          : "Remembering tokens is not available. Ask your app administrator to enable it.";
+        if (d.jira_connection_message && !d.has_jira_token) bannerMsg.textContent = d.jira_connection_message;
         showBanner(!d.has_jira_token);
       })
       .catch(function () {});
@@ -165,14 +174,16 @@
   banner.innerHTML =
     '<b>Connect Jira:</b><span>Enter your Jira Personal Access Token.</span>' +
     '<input type="password" autocomplete="off" placeholder="Paste your Jira token here …" aria-label="Jira Personal Access Token">' +
-    '<button type="button">Connect</button><a data-help>Where can I find my token?</a><div class="msg"></div>';
+    '<button type="button">Connect</button><a data-help>Where can I find my token?</a>' +
+    '<label><input type="checkbox" data-remember disabled>Remember for my account</label><div class="msg"></div>';
   var bannerInput = banner.querySelector("input");
+  var bannerRemember = banner.querySelector("[data-remember]");
   var bannerMsg = banner.querySelector(".msg");
   var bannerWanted = false;
   function showBanner(show) {
     bannerWanted = show;
     if (!banner.isConnected && document.body) document.body.appendChild(banner);
-    if (show) { banner.className = ""; banner.style.display = "flex"; }
+    if (show) { banner.className = ""; banner.querySelector("b").textContent = "Connect Jira:"; banner.style.display = "flex"; }
     else if (!banner.classList.contains("ok")) banner.style.display = "none";
   }
   function connectJira() {
@@ -181,14 +192,14 @@
     bannerMsg.textContent = "Checking …";
     fetch("/jira/api/credentials", {
       method: "POST", credentials: "same-origin",
-      headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jira_token: token })
+      headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jira_token: token, remember_jira: bannerRemember.checked && !bannerRemember.disabled })
     }).then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
       .then(function (res) {
         if (!res.ok) { bannerMsg.textContent = (res.d && res.d.detail) || "Connection failed."; return; }
         bannerInput.value = "";
         banner.className = "ok";
-        banner.innerHTML = "<b>Jira connected</b><span></span>";
-        banner.querySelector("span").textContent = "as " + res.d.jira_user;
+        banner.querySelector("b").textContent = "Jira connected";
+        bannerMsg.textContent = "Connected as " + res.d.jira_user + (res.d.jira_remembered ? ". Remembered for your account." : ". Session only.");
         setTimeout(function () { banner.style.display = "none"; }, 3500);
         bannerWanted = false;
         loadMe();

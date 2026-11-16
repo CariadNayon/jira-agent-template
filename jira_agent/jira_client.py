@@ -11,7 +11,9 @@ USER_RE = re.compile(r"[\w.\-@]+")
 
 
 class JiraError(Exception):
-    pass
+    def __init__(self, message: str, *, status_code: int | None = None):
+        super().__init__(message)
+        self.status_code = status_code
 
 
 class JiraClient:
@@ -40,7 +42,7 @@ class JiraClient:
         except requests.RequestException as e:
             raise JiraError(f"Jira is unreachable: {type(e).__name__}") from None
         if r.status_code != 200 or "json" not in r.headers.get("Content-Type", ""):
-            raise JiraError(f"Jira sign-in failed (HTTP {r.status_code}).")
+            raise JiraError(f"Jira sign-in failed (HTTP {r.status_code}).", status_code=r.status_code)
         return r.json()
 
     @staticmethod
@@ -126,7 +128,7 @@ class JiraClient:
         except requests.RequestException as e:
             raise JiraError(f"Jira is unreachable: {type(e).__name__}") from None
         if r.status_code not in ok:
-            raise JiraError(f"Jira error (HTTP {r.status_code}): {r.text[:300]}")
+            raise JiraError(f"Jira error (HTTP {r.status_code}): {r.text[:300]}", status_code=r.status_code)
         return r.json() if r.content else {}
 
     def search(self, jql: str, max_results: int = 20, fields: str = "summary,status,priority,assignee,updated",

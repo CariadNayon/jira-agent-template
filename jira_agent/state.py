@@ -1,7 +1,8 @@
 """Speicher pro Nutzer – nur im Arbeitsspeicher dieser App-Instanz (App mit 1 Instanz/1 Worker betreiben).
 
 Hier liegen Keys der Sitzung, der Schlüssel für Bestätigungscodes, die geladenen Einstellungen und
-erzeugte Dateien. Nichts davon wird auf Platte geschrieben; Keys verfallen nach credentials_ttl_hours.
+erzeugte Dateien. Klartext-Keys verlassen diese Ablage nicht; nach credentials_ttl_hours verfällt die Sitzung.
+Die optionale verschlüsselte Jira-Token-Ablage liegt getrennt in credentials.py.
 """
 from __future__ import annotations
 
@@ -40,6 +41,12 @@ class UserState:
     files: dict = field(default_factory=dict)          # vom Agenten erzeugte Dateien (Diagramme, Exporte)
     uploads: dict = field(default_factory=dict)        # vom Nutzer hochgeladene Dateien
     skills: dict | None = None                         # persönliche Skills (geladen aus dem Home-Ordner)
+    credential_lock: threading.RLock = field(default_factory=threading.RLock)
+    jira_restore_checked: bool = False
+    jira_restore_retry_at: float = 0
+    jira_saved: bool = False
+    jira_saved_until: int | None = None
+    jira_connection_message: str = ''
 
     def __repr__(self) -> str:
         return f"UserState(jira={self.jira_user is not None}, files={len(self.files)}, uploads={len(self.uploads)})"

@@ -45,15 +45,17 @@
   <label for="agentName">Agent name</label>
   <input id="agentName" type="text" maxlength="40" autocomplete="off">
   <div class="hint">Leave blank to use the default name from your Jira account. Click Save to apply.</div>
-  <p class="hint" style="margin-top:16px">Keys are valid for this session only, are kept in app memory and are never saved to disk.</p>
+  <p class="hint" style="margin-top:16px">Azure keys are kept in memory for this session. You can optionally remember your Jira token encrypted for your account.</p>
   <div id="jiraStatus"></div>
   <label for="jiraToken">Jira Personal Access Token</label>
   <input id="jiraToken" type="password" autocomplete="off">
+  <label style="font-weight:normal"><input id="rememberJira" type="checkbox" disabled> <span id="rememberJiraLabel">Remember for my account</span></label>
+  <div class="hint" id="rememberJiraHint">Remembering tokens is not configured for this app.</div>
   <div class="row"><button class="btn primary" id="connectJira">Connect to Jira</button><span id="jiraMsg"></span></div>
   <label for="azureKey">Your Azure OpenAI key (optional)</label>
   <input id="azureKey" type="password" autocomplete="off">
   <div class="row"><button class="btn" id="setAzure">Use Azure key</button><span id="azureMsg"></span></div>
-  <div class="row" style="margin-top:24px"><button class="btn" id="logout">Sign out (clear all keys)</button></div>
+  <div class="row" style="margin-top:24px"><button class="btn" id="logout">Disconnect and forget saved token</button></div>
 </section>
 
 <section id="model">
@@ -197,6 +199,19 @@
     p.className = me.jira_user ? "ok" : "hint";
     p.textContent = me.jira_user ? ("Jira: signed in as " + me.jira_user) : "Jira: not connected";
     $("jiraStatus").appendChild(p);
+    if (me.jira_connection_message) {
+      var warning = document.createElement("p"); warning.className = "err";
+      warning.textContent = me.jira_connection_message; $("jiraStatus").appendChild(warning);
+    }
+    $("rememberJira").disabled = !me.remember_jira_available;
+    $("rememberJira").checked = !!me.has_saved_jira_token;
+    $("rememberJiraLabel").textContent = "Remember for " + (me.remember_jira_days || 30) + " days";
+    $("rememberJiraHint").textContent = me.remember_jira_available
+      ? "Reconnect automatically after signing in. The token is stored encrypted in your personal workspace folder."
+      : "Remembering tokens is not available for this connection. Ask your app administrator to enable it.";
+    if (me.has_saved_jira_token && me.jira_saved_until) {
+      $("rememberJiraHint").textContent += " Remembered until " + new Date(me.jira_saved_until * 1000).toLocaleDateString("en-GB") + ".";
+    }
     msg("azureMsg", me.has_azure_key ? "Your Azure key is set" : "", true);
   }
 
@@ -266,7 +281,7 @@
     var token = $("jiraToken").value.trim();
     if (!token) return msg("jiraMsg", "Please enter a token.", false);
     msg("jiraMsg", "Checking …");
-    try { var r = await api("/jira/api/credentials", { method: "POST", body: JSON.stringify({ jira_token: token }) });
+    try { var r = await api("/jira/api/credentials", { method: "POST", body: JSON.stringify({ jira_token: token, remember_jira: $("rememberJira").checked && !$("rememberJira").disabled }) });
       $("jiraToken").value = ""; msg("jiraMsg", "Signed in as " + r.jira_user, true); await load(); notifyPage(); }
     catch (e) { msg("jiraMsg", e.message, false); }
   });
@@ -278,7 +293,9 @@
     catch (e) { msg("azureMsg", e.message, false); }
   });
   $("logout").addEventListener("click", async function () {
-    try { await api("/jira/api/credentials", { method: "DELETE" }); msg("jiraMsg", "Signed out. All keys cleared.", true); await load(); notifyPage(); }
+    try { var result = await api("/jira/api/credentials", { method: "DELETE" });
+      msg("jiraMsg", result.saved_token_deleted ? "Disconnected. Saved Jira token deleted; session keys cleared." : "Disconnected. Session keys cleared.", true);
+      await load(); notifyPage(); }
     catch (e) { msg("jiraMsg", e.message, false); }
   });
   $("resetRules").addEventListener("click", function () { $("rulesText").value = state.defaults.rules; });

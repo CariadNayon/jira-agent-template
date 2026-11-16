@@ -39,6 +39,8 @@ Tool-Aufrufe sind standardmäßig eingeklappt; Name und Status bleiben sichtbar.
 
 Jira-Zugangsdaten ausschließlich im Feld **Jira verbinden** oder unter Zahnrad → Zugänge einfügen, niemals als Chatnachricht. Die tatsächlichen Projektberechtigungen gelten weiterhin. Die Integration unterstützt Jira Data Center; Jira Cloud benötigt Anpassungen.
 
+Mit **Remember for my account** kann der Jira-Token optional verschlüsselt pro Databricks-Nutzer gespeichert werden. Nach erneuter Anmeldung wird er wiederhergestellt und gegen Jira geprüft. **Disconnect and forget saved token** entfernt die gespeicherte Kopie und die Sitzungsschlüssel. Einmalige Einrichtung des separaten App-Secrets und die genaue Ablage: [TOKEN_STORAGE.md](docs/TOKEN_STORAGE.md).
+
 ## Wo was liegt
 
 | Hier änderst du | |
@@ -80,7 +82,7 @@ Die GitHub Action [checks.yml](.github/workflows/checks.yml) prüft Änderungen 
 Gemeinsame Laufzeitoptimierungen und Auswertung langsamer Anfragen: [Performance](docs/PERFORMANCE.md). HTTP-Verbindungen werden wiederverwendet, der Modellkontext richtet sich nach den verfügbaren Fähigkeiten und jeder Lauf protokolliert getrennte Modell-, Tool- und Jira-Zeiten.
 
 - **Bestätigung:** Schreib-Tools (`write=True`) benötigen einen einmaligen Code (10 Minuten gültig), gebunden an Sitzung, Gespräch und Argumente. Wiederholte Aufrufe derselben Bestätigung liefern einen Aktionsbeleg. Bei Verbindungsfehlern wird kein zweiter Agentenlauf automatisch gestartet. Belege liegen nur im Arbeitsspeicher; nach Neustarts ungeklärte Änderungen zuerst in Jira prüfen.
-- **Genau 1 Worker:** Keys, Bestätigungscodes und erzeugte Dateien liegen nur im Arbeitsspeicher. `start-server` verweigert `--workers` > 1. Keys verfallen spätestens `session.credentials_ttl_hours` nach Beginn der Sitzung.
+- **Genau 1 Worker:** Klartext-Keys, Bestätigungscodes und erzeugte Dateien liegen im Arbeitsspeicher. `start-server` verweigert `--workers` > 1. Die Sitzung verfällt nach `session.credentials_ttl_hours`; ein optional gemerkter Jira-Token kann anschließend nach Nutzeranmeldung aus der verschlüsselten Ablage wiederhergestellt werden. Azure-Nutzerkeys werden nicht gespeichert.
 - **SQL:** Erlaubt ist nur genau ein `SELECT` auf freigegebenen Tabellen und mit eingebauten Funktionen. `ai_query`, `http_request`, `secret`, `reflect`, UC-Funktionen usw. sind gesperrt ([data.py](jira_agent/data.py)).
 - **Bilder in der Chat-UI** werden per Content-Security-Policy nur von der App selbst geladen. So können eingeschleuste Markdown-Bilder keine Daten an fremde Server senden.
 - **Datenschutz:** MLflow-Traces enthalten Chat-Inhalte inklusive Ticket-Texten und Abfrageergebnissen (keine Keys). Den Zugriff auf das MLflow-Experiment deshalb restriktiv vergeben.

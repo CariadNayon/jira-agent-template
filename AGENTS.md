@@ -53,7 +53,7 @@ Architektur, Tool-Auswahl und Wiederverwendung: `docs/EXTENDING.md`. Standard-Ji
 
 1. Tools, die etwas **ändern**, bekommen `write=True` – nie umgehen oder abschwächen.
 2. SQL nur über `ctx.sql` und `check_readonly_sql` (ein SELECT, nur freigegebene Tabellen, nur eingebaute Funktionen).
-3. Keine Tokens, Keys oder Passwörter in Code, Tool-Ergebnissen, Logs, Traces oder `settings.json`. Jira-Tokens liegen nur im Speicher.
+3. Keine Tokens, Keys oder Passwörter in Code, Tool-Ergebnissen, Logs, Traces oder `settings.json`. Klartext-Keys liegen nur im Speicher. Optional gemerkte Jira-Tokens werden ausschließlich mit `jira_agent/credentials.py` verschlüsselt im persönlichen Workspace-Ordner abgelegt, mit den Rechten des Nutzers und einem separaten App-Secret. Keine Token-Ablage in Browser-Storage; niemals den Klartext an das Modell zurückgeben.
 4. Eingaben prüfen (`JiraClient.check_key`, `check_user`, Regex).
 5. Die App läuft mit **genau einem Worker** (Sitzungsdaten im Speicher).
 6. Daten werden mit den Rechten des **angemeldeten Nutzers** gelesen, nie mit denen der App.

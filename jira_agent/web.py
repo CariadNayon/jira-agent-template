@@ -24,6 +24,8 @@ from jira_agent.settings_store import SettingsStore, sanitize
 from jira_agent.skills import MAX_PERSONAL, PersonalSkillStore, check_skill, render_skill, team_skills
 from jira_agent.state import UploadSink, get_file, logout, user_state
 from jira_agent.uploads import validate_upload
+from jira_agent.credentials import (JiraTokenStore, cipher, remember_days,
+                                    restore_jira, set_jira_identity)
 
 _STATIC = Path(__file__).parent / "static"
 _UI_TAG = b'<script src="/jira/static/ui.js" defer></script>'
@@ -50,9 +52,11 @@ def _client(token: str | None):
 
 # ---------------------------------------------------------------- Status
 @router.get("/api/me")
-async def me(request: Request):
+async def me(request: Request, response: Response):
+    response.headers['Cache-Control'] = 'private, no-store'
     email, token = _who(request)
     state = user_state(email)
+    await asyncio.to_thread(restore_jira, state, email, token)
     settings = await asyncio.to_thread(load_settings, state, email, token)
     return {
         "email": email,
@@ -61,6 +65,11 @@ async def me(request: Request):
         "agent_name_default": default_agent_name(state.jira_display_name),
         "has_jira_token": bool(state.creds.get("jira_token")),
         "has_azure_key": bool(state.creds.get("azure_key")),
+        "remember_jira_available": cipher() is not None and bool(token),
+        "remember_jira_days": remember_days(),
+        "has_saved_jira_token": state.jira_saved,
+        "jira_saved_until": state.jira_saved_until,
+        "jira_connection_message": state.jira_connection_message,
         "settings": settings,
         "defaults": {"rules": DEFAULT_SETTINGS["rules"], "azure_endpoint": CFG["llm"]["azure_endpoint"],
                      "azure_deployment": CFG["llm"]["deployment"], "azure_api_version": CFG["llm"]["api_version"]},
@@ -73,22 +82,50 @@ async def me(request: Request):
 class Credentials(BaseModel):
     jira_token: str | None = None
     azure_key: str | None = None
+    remember_jira: bool = False
+
+
+def _connect_jira(state, email, user_token, jira_token, remember):
+    with state.credential_lock:
+        if remember and (cipher() is None or not user_token):
+            raise HTTPException(400, 'Remembering Jira tokens is not available for this connection.')
+        try:
+            myself = JiraClient(CFG['jira']['base_url'], jira_token).myself()
+            JiraClient.check_user(myself.get('name') or '')
+        except (JiraError, ValueError, AttributeError) as exc:
+            detail = str(exc) if isinstance(exc, JiraError) else 'Jira did not return a valid user identity.'
+            raise HTTPException(400, detail) from None
+        expires_at = None
+        try:
+            if remember:
+                expires_at = JiraTokenStore(_client(user_token), email).save(jira_token)
+            elif user_token and (cipher() is not None or state.jira_saved):
+                # Replacing a remembered token with a session-only token must remove the old copy.
+                JiraTokenStore(_client(user_token), email).delete()
+            elif state.jira_saved:
+                raise HTTPException(403, 'Sign in again to remove the previously saved Jira token.')
+        except HTTPException:
+            raise
+        except Exception:
+            raise HTTPException(502, 'The saved Jira connection could not be updated. Please try again.') from None
+        set_jira_identity(state, jira_token, myself)
+        state.jira_saved = remember
+        state.jira_saved_until = expires_at
+        state.jira_restore_checked = True
+        state.jira_restore_retry_at = 0
+        state.jira_connection_message = ''
+        return {'jira_user': state.jira_user, 'jira_remembered': remember, 'jira_saved_until': expires_at}
 
 
 @router.post("/api/credentials")
-async def set_credentials(body: Credentials, request: Request):
-    email, _ = _who(request)
+async def set_credentials(body: Credentials, request: Request, response: Response):
+    response.headers['Cache-Control'] = 'private, no-store'
+    email, user_token = _who(request)
     state = user_state(email)
     result = {}
     if body.jira_token:
-        try:
-            me_ = await asyncio.to_thread(JiraClient(CFG["jira"]["base_url"], body.jira_token).myself)
-        except JiraError as e:
-            raise HTTPException(400, str(e)) from None
-        state.creds["jira_token"] = body.jira_token
-        state.jira_user = f"{me_.get('name')} | {me_.get('displayName')}"
-        state.jira_display_name = me_.get("displayName")
-        result["jira_user"] = state.jira_user
+        result.update(await asyncio.to_thread(_connect_jira, state, email, user_token,
+                                              body.jira_token, body.remember_jira))
     if body.azure_key:
         state.creds["azure_key"] = body.azure_key
         result["azure_key"] = "set"
@@ -96,10 +133,28 @@ async def set_credentials(body: Credentials, request: Request):
 
 
 @router.delete("/api/credentials")
-async def delete_credentials(request: Request):
-    email, _ = _who(request)
-    logout(email)
-    return {"status": "signed_out"}
+async def delete_credentials(request: Request, response: Response):
+    response.headers['Cache-Control'] = 'private, no-store'
+    email, user_token = _who(request)
+    state = user_state(email)
+    def forget():
+        with state.credential_lock:
+            removed = False
+            if user_token:
+                try:
+                    JiraTokenStore(_client(user_token), email).delete()
+                    removed = True
+                except Exception:
+                    raise HTTPException(502, 'The saved Jira token could not be deleted. Please try again.') from None
+            elif state.jira_saved:
+                raise HTTPException(403, 'Sign in again to forget the saved Jira token.')
+            state.creds.clear()
+            state.jira_user = state.jira_display_name = None
+            state.jira_restore_checked = True
+            state.jira_saved = False
+            logout(email)
+            return {'status': 'signed_out', 'saved_token_deleted': removed}
+    return await asyncio.to_thread(forget)
 
 
 # ---------------------------------------------------------------- Einstellungen (Home-Ordner, ohne Keys)

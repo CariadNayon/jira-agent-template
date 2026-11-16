@@ -14,6 +14,12 @@ variables:
   secret_key:
     description: "Key im Secret Scope"
     default: gpt-4-api-key
+  token_encryption_secret_key:
+    description: "Optionaler separater Fernet-Key für gemerkte Jira-Tokens (siehe docs/TOKEN_STORAGE.md)"
+    default: jira-agent-token-encryption-key
+  token_encryption_secret_scope:
+    description: "Optionaler eingeschränkter Secret Scope für gemerkte Jira-Tokens"
+    default: jira-agent-credentials
   warehouse_id:
     description: "SQL Warehouse für Abfragen"
     default: "822757479507240e"
@@ -43,6 +49,9 @@ resources:
           # Jira-Agent: zentraler Azure-OpenAI-Key und Warehouse (siehe jira_agent/config.yaml)
           - name: AZURE_OPENAI_KEY
             value_from: "secret"
+          # Optional: nach Anlegen des separaten Secrets aktivieren (siehe docs/TOKEN_STORAGE.md).
+          # - name: JIRA_TOKEN_ENCRYPTION_KEY
+          #   value_from: "jira-token-key"
           - name: WAREHOUSE_ID
             value_from: "sql-warehouse"
 
@@ -63,6 +72,13 @@ resources:
           sql_warehouse:
             id: ${var.warehouse_id}
             permission: 'CAN_USE'
+
+        # Optional gemeinsam mit JIRA_TOKEN_ENCRYPTION_KEY oben aktivieren.
+        # - name: 'jira-token-key'
+        #   secret:
+        #     scope: ${var.token_encryption_secret_scope}
+        #     key: ${var.token_encryption_secret_key}
+        #     permission: 'READ'
 
       # On-behalf-of-user access: SQL, Unity Catalog browsing and the user's settings file in their home folder
       user_api_scopes:

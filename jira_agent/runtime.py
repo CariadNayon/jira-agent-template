@@ -182,6 +182,8 @@ def prepare(headers: Mapping[str, str], messages: list[dict], conversation_id: s
             raise PermissionError("Request rejected: missing user identity (x-forwarded-email).")
         email = "local"
     state = user_state(email)
+    from jira_agent.credentials import restore_jira
+    restore_jira(state, email, token)
     settings = load_settings(state, email, token)
     tables = list(settings["selected_tables"])
     w = user_client(token) if token and tables else None
