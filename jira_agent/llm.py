@@ -49,7 +49,8 @@ def _azure_model(api_key: str, endpoint: str, api_version: str, deployment: str)
     from jira_agent.connections import azure_http_client
 
     http_client = azure_http_client()
-    client = AsyncAzureOpenAI(api_key=api_key, api_version=api_version, azure_endpoint=endpoint,
+    # Mehr Wiederholungen als Standard (2): bei 429 (Token-Limit pro Minute) wartet das SDK gemäß Retry-After.
+    client = AsyncAzureOpenAI(api_key=api_key, api_version=api_version, azure_endpoint=endpoint, max_retries=6,
                              **({'http_client': http_client} if http_client is not None else {}))
     model = OpenAIChatCompletionsModel(model=deployment, openai_client=client)
     model._jira_agent_client = client  # This factory owns one SDK client per run.
