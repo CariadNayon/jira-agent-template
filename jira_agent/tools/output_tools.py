@@ -38,22 +38,21 @@ def _num(value):
 
 def _sql_result(ctx: ToolContext, sql: str) -> dict:
     if ctx.sql is None:
-        raise RuntimeError("Keine Tabellen freigegeben – bitte über das Zahnrad unter Datenquellen auswählen.")
+        raise RuntimeError("No tables enabled. Please select tables under Settings → Data sources.")
     return ctx.sql.query(check_readonly_sql(sql, ctx.selected_tables), row_limit=_EXPORT_ROWS)
 
 
 @tool(needs=["sql", "files"])
 def create_chart(ctx: ToolContext, sql: str, chart_type: Literal["bar", "line", "pie", "scatter"], x: str, y: str,
                  title: str = "") -> dict:
-    """Erstellt ein Diagramm (PNG) aus genau einem lesenden SELECT auf freigegebenen Tabellen.
-    Das SELECT sollte bereits aggregiert sein (z. B. GROUP BY), max. 50 Punkte.
+    """Creates a chart (PNG) from exactly one read-only SELECT on enabled tables.
+    The SELECT should already aggregate the data (e.g. GROUP BY); at most 50 points.
 
-    sql: SELECT auf freigegebenen Tabellen
-    chart_type: Diagrammtyp
-    x: Spalte für Kategorien bzw. X-Achse
-    y: Spalte mit Zahlenwerten
-    title: Überschrift
-    """
+    sql: SELECT on enabled tables
+    chart_type: chart type
+    x: category or X-axis column
+    y: numeric value column
+    title: chart title"""
     res = _sql_result(ctx, sql)
     if "error" in res:
         return res
@@ -64,12 +63,12 @@ def chart_from_result(files, res: dict, chart_type: str, x: str, y: str, title: 
     """Shared renderer; Matplotlib is serialized and every figure is closed on failure."""
     cols = res["columns"]
     if x not in cols or y not in cols:
-        raise ValueError(f"Spalten {x!r}/{y!r} nicht im Ergebnis. Vorhanden: {cols}")
+        raise ValueError(f"Columns {x!r}/{y!r} not in the result. Available: {cols}")
     xi, yi = cols.index(x), cols.index(y)
     points = [(row[xi], _num(row[yi])) for row in res["rows"] if _num(row[yi]) is not None]
     ignored = len(res["rows"])-len(points)
     if not points:
-        raise ValueError(f"Spalte {y!r} enthält keine endlichen Zahlen.")
+        raise ValueError(f"Column {y!r} contains no finite numbers.")
     cut = len(points) > _MAX_POINTS
     points = points[:_MAX_POINTS]
     labels, values = [str(p[0]) for p in points], [p[1] for p in points]
@@ -84,14 +83,14 @@ def chart_from_result(files, res: dict, chart_type: str, x: str, y: str, title: 
             elif chart_type == "scatter":
                 xs = [_num(p[0]) for p in points]
                 if any(v is None for v in xs):
-                    raise ValueError(f"Für scatter muss {x!r} numerisch sein.")
+                    raise ValueError(f"For scatter, {x!r} must be numeric.")
                 ax.scatter(xs,values)
             elif chart_type == "pie":
                 if any(v < 0 for v in values) or sum(values) <= 0:
-                    raise ValueError("Tortendiagramme benötigen nichtnegative Werte und eine positive Summe.")
+                    raise ValueError("Pie charts require nonnegative values and a positive sum.")
                 ax.pie(values,labels=labels,autopct="%1.0f%%")
-            else: raise ValueError("chart_type muss bar, line, pie oder scatter sein.")
-            ax.set_title(title or f"{y} nach {x}")
+            else: raise ValueError("chart_type must be bar, line, pie or scatter.")
+            ax.set_title(title or f"{y} by {x}")
             if chart_type != "pie":
                 ax.set_xlabel(x); ax.set_ylabel(y)
                 if chart_type in ("bar","line"):
@@ -100,7 +99,7 @@ def chart_from_result(files, res: dict, chart_type: str, x: str, y: str, title: 
             buf=io.BytesIO(); fig.savefig(buf,format="png")
         finally:
             plt.close(fig)
-    url=files.put(_safe_name(title or "diagramm","png"),"image/png",buf.getvalue())
+    url=files.put(_safe_name(title or "chart","png"),"image/png",buf.getvalue())
     return {"markdown":f"![{title or 'Diagramm'}]({url})","punkte":len(points),
             "gekuerzt":cut or bool(res.get("truncated")),"ausgelassene_werte":ignored}
 
@@ -108,31 +107,30 @@ def chart_from_result(files, res: dict, chart_type: str, x: str, y: str, title: 
 @tool(needs=["files"])
 def export_file(ctx: ToolContext, source: Literal["sql", "jql"], query: str, format: Literal["csv", "xlsx"],
                 filename: str = "", start_at: int = 0) -> dict:
-    """Exportiert Daten als Datei (CSV oder Excel) zum Download. source='sql': ein lesendes SELECT
-    auf freigegebenen Tabellen; source='jql': Jira-Tickets über alle Ergebnisseiten, bis zum konfigurierten Export-Limit.
+    """Exports data as a CSV or Excel file for download. source='sql': one read-only SELECT on enabled tables;
+    source='jql': Jira issues across all result pages, up to the configured export limit.
 
-    source: Datenquelle
-    query: SELECT bzw. JQL
-    format: Dateiformat
-    filename: Dateiname ohne Endung
-    start_at: nur für JQL: Ergebnisposition ab 0; für weitere Dateien next_start_at verwenden
-    """
+    source: data source
+    query: SELECT or JQL
+    format: file format
+    filename: file name without extension
+    start_at: JQL only: zero-based result position; use next_start_at for additional files"""
     if source == "sql":
         if start_at:
-            raise ValueError("start_at ist nur für JQL-Exporte vorgesehen.")
+            raise ValueError("start_at is supported for JQL exports only.")
         res = _sql_result(ctx, query)
         if "error" in res:
             return res
         columns, rows = res["columns"], res["rows"]
     elif source == "jql":
         if ctx.jira is None:
-            raise RuntimeError("Kein Jira-Token – bitte über das Zahnrad verbinden.")
+            raise RuntimeError("No Jira token. Please connect under Settings.")
         res = export_issues(ctx.jira, query, _EXPORT_ROWS, start_at)
         columns = ["key", "summary", "status", "priority", "components", "assignee", "updated"]
         rows = [[", ".join(i[c]) if isinstance(i.get(c), list) else i.get(c) for c in columns]
                 for i in res["issues"]]
     else:
-        raise ValueError("source muss sql oder jql sein.")
+        raise ValueError("source must be sql or jql.")
 
     result=export_result(ctx.files,columns,rows,format,filename or f"export_{source}")
     return {**result, "truncated":bool(res.get("truncated")),
@@ -173,9 +171,9 @@ def export_result(files, columns: list, rows: list, format: str, filename: str) 
         data = buf.getvalue()
         mime = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     else:
-        raise ValueError("format muss csv oder xlsx sein.")
+        raise ValueError("format must be csv or xlsx.")
 
     name = _safe_name(filename, format)
     url = files.put(name, mime, data)
     return {"markdown": f"[{name} herunterladen]({url})", "zeilen": len(rows),
-            "hint": "Textzellen bleiben Text; CSV-Formelpräfixe werden mit einem Apostroph entschärft."}
+            "hint": "Text cells remain text; CSV formula prefixes are escaped with a leading apostrophe."}

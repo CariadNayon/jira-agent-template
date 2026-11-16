@@ -39,7 +39,7 @@ _AZURE_ENDPOINT_RE = re.compile(r"https://[a-z0-9\-]+\.(openai\.azure\.com|cogni
 
 def check_azure_endpoint(endpoint: str) -> str:
     if not _AZURE_ENDPOINT_RE.fullmatch(endpoint or ""):
-        raise ValueError("Endpoint muss https://<name>.openai.azure.com oder .cognitiveservices.azure.com sein.")
+        raise ValueError("Endpoint must be https://<name>.openai.azure.com or .cognitiveservices.azure.com.")
     return endpoint
 
 
@@ -64,18 +64,18 @@ def central_key(cfg: dict) -> str:
     return str(_central_key["key"])
 
 
-@provider("azure_central", "Azure OpenAI (Team-Key)")
+@provider("azure_central", "Azure OpenAI (team key)")
 def _azure_central(cfg: dict, settings: dict, creds: dict):
     return _azure_model(central_key(cfg), cfg["azure_endpoint"],
                         settings.get("azure_api_version") or cfg["api_version"],
                         settings.get("azure_deployment") or cfg["deployment"])
 
 
-@provider("azure_own", "Azure OpenAI (eigener Key)", needs_own_key=True)
+@provider("azure_own", "Azure OpenAI (your own key)", needs_own_key=True)
 def _azure_own(cfg: dict, settings: dict, creds: dict):
     api_key = creds.get("azure_key")
     if not api_key:
-        raise RuntimeError("Bitte über das Zahnrad unter Zugänge einen eigenen Azure-Key eintragen.")
+        raise RuntimeError("Please enter your own Azure key under Settings → Connections.")
     return _azure_model(api_key, check_azure_endpoint(settings.get("azure_endpoint") or cfg["azure_endpoint"]),
                         settings.get("azure_api_version") or cfg["api_version"],
                         settings.get("azure_deployment") or cfg["deployment"])
@@ -83,5 +83,5 @@ def _azure_own(cfg: dict, settings: dict, creds: dict):
 
 def build_model(name: str, cfg: dict, settings: dict, creds: dict):
     if name not in PROVIDERS:
-        raise ValueError(f"Unbekannter LLM-Provider: {name}")
+        raise ValueError(f"Unknown LLM provider: {name}")
     return PROVIDERS[name].build(cfg, settings, creds)

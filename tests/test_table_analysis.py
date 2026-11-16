@@ -61,13 +61,13 @@ def test_excel_sheet_selection_and_uncached_formulas(sink):
     wb.create_sheet('Two').append(['Amount'])
     out=io.BytesIO();wb.save(out)
     fid=sink.put('book.xlsx','application/octet-stream',out.getvalue())
-    assert 'Tabellenblatt' in run_tool('analyze_uploaded_table',uploads=sink,file_id=fid)['details']
+    assert 'worksheet' in run_tool('analyze_uploaded_table',uploads=sink,file_id=fid)['details']
     assert run_tool('analyze_uploaded_table',uploads=sink,file_id=fid,sheet='One')['columns'][0]['statistics']['sum']==7
     wb.active.append(['=SUM(A2:A2)'])
     out=io.BytesIO();wb.save(out)
     formula=sink.put('formulas.xlsx','application/octet-stream',out.getvalue())
     result=run_tool('analyze_uploaded_table',uploads=sink,file_id=formula,sheet='One')
-    assert result['error']=='ValueError' and 'Formeln ohne gespeichertes Ergebnis' in result['details']
+    assert result['error']=='ValueError' and 'formulas without cached results' in result['details']
 
 
 def test_export_includes_every_filtered_row_and_chart_uses_calculated_data(sink):
@@ -98,7 +98,7 @@ def test_size_limit_never_returns_partial_calculation(sink,monkeypatch):
     monkeypatch.setattr('jira_agent.table_data._MAX_ROWS',2)
     fid=add(sink,'Amount\n1\n2\n3\n')
     result=run_tool('analyze_uploaded_table',uploads=sink,file_id=fid)
-    assert result['error']=='ValueError' and 'keine Teilanalyse' in result['details']
+    assert result['error']=='ValueError' and 'No partial analysis' in result['details']
 
 
 def test_exported_cell_text_is_not_executed_as_formula(sink):
@@ -118,7 +118,7 @@ def test_exported_cell_text_is_not_executed_as_formula(sink):
 def test_chart_rejects_partially_numeric_text_instead_of_dropping_rows(sink):
     fid=add(sink,'Category;Amount\nA;3\nB;invalid\n')
     result=run_tool('create_uploaded_chart',uploads=sink,files=FakeFiles(),file_id=fid,x='Category',y='Amount')
-    assert result['error']=='ValueError' and 'numerisch' in result['details']
+    assert result['error']=='ValueError' and 'numeric' in result['details']
 
 
 def test_group_size_counts_rows_while_count_ignores_empty_cells(sink):

@@ -73,7 +73,7 @@ def _headers(values):
     for i, value in enumerate(values):
         original = '' if value is None else str(value).strip()
         if len(original)>128:
-            raise ValueError('Spaltennamen dürfen höchstens 128 Zeichen lang sein. Die erste Zeile wird als Kopfzeile gelesen.')
+            raise ValueError('Column names must be at most 128 characters long. The first row is read as the header.')
         base = original or f'column_{i+1}'
         name, suffix = base, 2
         while name.casefold() in used:
@@ -89,7 +89,7 @@ def load_table(file, sheet: str = '', number_format: str = 'auto') -> TableData:
     from openpyxl import load_workbook
 
     if number_format not in ('auto', 'de', 'en'):
-        raise ValueError('number_format muss auto, de oder en sein.')
+        raise ValueError('number_format must be auto, de or en.')
     ext = PurePath(file.name).suffix.lower()
     workbook = formulas = None
     warnings = []
@@ -107,46 +107,46 @@ def load_table(file, sheet: str = '', number_format: str = 'auto') -> TableData:
         elif ext in ('.xlsx', '.xlsm'):
             with zipfile.ZipFile(io.BytesIO(file.data)) as archive:
                 if sum(x.file_size for x in archive.infolist()) > _MAX_XLSX_BYTES:
-                    raise ValueError('Die entpackte Excel-Datei ist zu groß (maximal 100 MB).')
+                    raise ValueError('The uncompressed Excel file is too large (maximum 100 MB).')
             workbook = load_workbook(io.BytesIO(file.data), read_only=True, data_only=True)
             if not workbook.sheetnames:
-                raise ValueError('Die Excel-Datei enthält kein Tabellenblatt.')
+                raise ValueError('The Excel file has no worksheets.')
             if not sheet and len(workbook.sheetnames) > 1:
-                raise ValueError('Bitte ein Tabellenblatt auswählen. Vorhanden: ' + ', '.join(workbook.sheetnames))
+                raise ValueError('Please select a worksheet. Available: ' + ', '.join(workbook.sheetnames))
             selected_sheet = sheet or workbook.sheetnames[0]
             if selected_sheet not in workbook.sheetnames:
-                raise ValueError('Tabellenblatt nicht gefunden. Vorhanden: ' + ', '.join(workbook.sheetnames))
+                raise ValueError('Worksheet not found. Available: ' + ', '.join(workbook.sheetnames))
             formulas = load_workbook(io.BytesIO(file.data), read_only=True, data_only=False)
             ws, fs = workbook[selected_sheet], formulas[selected_sheet]
             if ws.max_column and ws.max_column > _MAX_COLUMNS:
-                raise ValueError(f'Zu viele Spalten. Maximal {_MAX_COLUMNS}.')
+                raise ValueError(f'Zu viele columns. Maximal {_MAX_COLUMNS}.')
             # Do not trust stale worksheet dimensions in third-party exports.
             ws.reset_dimensions()
             fs.reset_dimensions()
             iterator = iter(ws.iter_rows(values_only=True))
             formula_iterator = iter(fs.iter_rows(values_only=True))
         else:
-            raise ValueError('Tabellenanalyse unterstützt CSV, TSV, XLSX und XLSM.')
+            raise ValueError('Table analysis supports CSV, TSV, XLSX and XLSM.')
         raw_headers = next(iterator, [])
         if formula_iterator is not None:
             next(formula_iterator, None)
         if not raw_headers or len(raw_headers) > _MAX_COLUMNS:
-            raise ValueError(f'Leere Tabelle oder mehr als {_MAX_COLUMNS} Spalten.')
+            raise ValueError(f'Empty table or more than {_MAX_COLUMNS} columns.')
         names, mapping = _headers(raw_headers)
         rows = []
         for row in iterator:
             formula_row = next(formula_iterator, ()) if formula_iterator is not None else ()
             if any(isinstance(v, str) and v.startswith('=') and (j >= len(row) or row[j] is None)
                    for j, v in enumerate(formula_row)):
-                raise ValueError('Excel enthält Formeln ohne gespeichertes Ergebnis. Bitte in Excel neu berechnen und speichern.')
+                raise ValueError('Excel contains formulas without cached results. Recalculate and save the file in Excel first.')
             if not any(v is not None and str(v).strip() for v in row):
                 continue
             if len(row) > len(names) and any(v is not None and str(v).strip() for v in row[len(names):]):
-                raise ValueError('Eine Datenzeile hat mehr Spalten als die Kopfzeile. Bitte die Datei korrigieren.')
+                raise ValueError('A data row has more columns than the header. Please fix the file.')
             rows.append([None if v is None or (isinstance(v,str) and not v.strip()) else v
                          for v in [*row[:len(names)], *([None] * max(0, len(names)-len(row))) ]])
             if len(rows) > _MAX_ROWS or len(rows) * len(names) > _MAX_CELLS:
-                raise ValueError('Tabelle zu groß. Maximal 100.000 Zeilen und 2 Millionen Zellen; keine Teilanalyse ausgeführt.')
+                raise ValueError('Table too large. Maximum: 100,000 rows and 2 million cells. No partial analysis was performed.')
         frame = pd.DataFrame(rows, columns=names)
         for name in names:
             series = frame[name]
@@ -157,12 +157,12 @@ def load_table(file, sheet: str = '', number_format: str = 'auto') -> TableData:
             else:
                 frame[name] = series.map(lambda v: v.isoformat() if isinstance(v,(date,datetime)) else v)
         if number_format == 'auto':
-            warnings.append('auto wandelt CSV-Zahlen nur bei eindeutigen Ganzzahlen um. Für Dezimal-/Tausendertrennzeichen de oder en wählen.')
+            warnings.append('auto converts CSV numbers only when they are unambiguous integers. Select de or en for decimal and thousands separators.')
         if any(x['column'] != x['original'] for x in mapping):
-            warnings.append('Leere oder doppelte Spaltennamen wurden eindeutig benannt; siehe header_mapping.')
+            warnings.append('Blank or duplicate column names were made unique; see header_mapping.')
         return TableData(frame, selected_sheet, number_format, mapping, warnings)
     except (zipfile.BadZipFile, csv.Error) as exc:
-        raise ValueError('Tabellendatei ist beschädigt oder nicht lesbar.') from exc
+        raise ValueError('The table file is damaged or unreadable.') from exc
     finally:
         if workbook is not None:
             workbook.close()
@@ -172,7 +172,7 @@ def load_table(file, sheet: str = '', number_format: str = 'auto') -> TableData:
 
 def _column(frame, name):
     if name not in frame.columns:
-        raise ValueError(f'Spalte {name!r} nicht vorhanden. Vorhanden: {list(frame.columns)}')
+        raise ValueError(f'Column {name!r} not found. Available: {list(frame.columns)}')
     return frame[name]
 
 
@@ -182,7 +182,7 @@ def apply_filters(frame, filters: list[dict] | None):
         raise ValueError('Maximal 20 Filter.')
     for condition in filters or []:
         if not isinstance(condition,dict):
-            raise ValueError('Filter müssen Objekte sein.')
+            raise ValueError('Filters must be objects.')
         name, operation, value = condition.get('column'), condition.get('op'), condition.get('value')
         series = _column(frame,name)
         if operation in ('is_empty','not_empty'):
@@ -191,17 +191,17 @@ def apply_filters(frame, filters: list[dict] | None):
             mask = series.astype('string').str.contains(str(value), regex=False, na=False)
         elif operation == 'in':
             if not isinstance(value,list):
-                raise ValueError('Filter in benötigt eine Liste als value.')
+                raise ValueError('The in filter requires a list as value.')
             mask = series.isin(value)
         elif operation in ('eq','ne','gt','gte','lt','lte'):
             if pd.api.types.is_numeric_dtype(series) and not isinstance(value,(int,float)):
-                raise ValueError(f'Filterwert für {name} muss eine Zahl sein.')
+                raise ValueError(f'Filter value for {name} must be a number.')
             if operation in ('gt','gte','lt','lte') and not pd.api.types.is_numeric_dtype(series) and isinstance(value,(int,float)):
-                raise ValueError(f'Spalte {name} ist Text; Zahlenformat prüfen.')
+                raise ValueError(f'Column {name} contains text; check the number format.')
             comparisons = {'eq':series.eq,'ne':series.ne,'gt':series.gt,'gte':series.ge,'lt':series.lt,'lte':series.le}
             mask = comparisons[operation](value) & series.notna()
         else:
-            raise ValueError('Unbekannter Filter. Möglich: eq, ne, gt, gte, lt, lte, contains, in, is_empty, not_empty.')
+            raise ValueError('Unknown filter. Supported: eq, ne, gt, gte, lt, lte, contains, in, is_empty, not_empty.')
         frame = frame[mask]
     return frame
 
@@ -230,7 +230,7 @@ def analyze(table: TableData, operation='profile', group_by=None, aggregations=N
                 'next_column_offset':end if end<len(names) else None,'truncated':end<len(names)}
     if operation == 'aggregate':
         if len(group_by or []) > 5 or not aggregations or len(aggregations) > 20:
-            raise ValueError('Aggregationen: 1–20 Berechnungen und höchstens 5 Gruppenspalten angeben.')
+            raise ValueError('Aggregations require 1–20 calculations and at most 5 grouping columns.')
         for name in group_by or []:
             _column(frame,name)
         named = {}
@@ -238,11 +238,11 @@ def analyze(table: TableData, operation='profile', group_by=None, aggregations=N
             column, func, alias = item.get('column'),item.get('op'),item.get('name')
             series = _column(frame,column)
             if func not in ('sum','mean','median','min','max','count','size','nunique'):
-                raise ValueError('Berechnung muss sum, mean, median, min, max, count, size oder nunique sein.')
+                raise ValueError('Calculation must be sum, mean, median, min, max, count, size or nunique.')
             if func in ('sum','mean','median') and not pd.api.types.is_numeric_dtype(series):
-                raise ValueError(f'Spalte {column} ist Text. Zahlenformat de/en wählen oder fehlerhafte Werte korrigieren.')
+                raise ValueError(f'Column {column} contains text. Select number format de/en or correct invalid values.')
             if not isinstance(alias,str) or not alias or len(alias)>128 or alias in named or alias in (group_by or []):
-                raise ValueError('Jede Berechnung benötigt einen eindeutigen name, verschieden von den Gruppenspalten.')
+                raise ValueError('Each calculation needs a unique name that differs from the grouping columns.')
             named[alias] = pd.NamedAgg(column=column,aggfunc=func)
         if group_by:
             result = frame.groupby(group_by,dropna=False,sort=False).agg(**named).reset_index()
@@ -251,7 +251,7 @@ def analyze(table: TableData, operation='profile', group_by=None, aggregations=N
     elif operation == 'rows':
         result = frame
     else:
-        raise ValueError('operation muss profile, rows oder aggregate sein.')
+        raise ValueError('operation must be profile, rows or aggregate.')
     if columns is not None:
         for name in columns:_column(result,name)
         result=result[columns]

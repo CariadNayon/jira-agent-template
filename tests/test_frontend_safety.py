@@ -75,6 +75,20 @@ def test_patch_is_idempotent_and_preserves_other_upstream_functions(tmp_path):
     assert '// rest of upstream module' in fallback.read_text()
 
 
+def test_existing_frontend_gets_english_errors_without_restoring_retries(tmp_path):
+    route, fallback = frontend(tmp_path)
+    ensure_frontend_safety(tmp_path)
+    source = fallback.read_text().replace('The connection was interrupted.', 'Die Verbindung wurde unterbrochen.')
+    # Reproduce the exact message from the previous app version.
+    source = source.replace('Die Verbindung wurde unterbrochen. The agent was not restarted. ',
+                            'Die Verbindung wurde unterbrochen. Der Agent wurde nicht erneut gestartet. ')
+    fallback.write_text(source)
+    ensure_frontend_safety(tmp_path)
+    assert 'Die Verbindung' not in fallback.read_text()
+    assert 'The connection was interrupted.' in fallback.read_text()
+    assert 'maxRetries: 0' in route.read_text()
+
+
 def test_changed_upstream_fails_before_any_file_is_written(tmp_path):
     route, fallback = frontend(tmp_path)
     before = route.read_text()

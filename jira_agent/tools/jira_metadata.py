@@ -24,34 +24,33 @@ def summarize_fields(fields: list[tuple[str, dict]], field_id: str, value_query:
     if field_id:
         match = next((meta for key, meta in fields if key == field_id), None)
         if match is None:
-            raise ValueError(f"Feld {field_id} ist hier nicht verfügbar.")
+            raise ValueError(f"Feld {field_id} is unavailable here.")
         return {"fields": [field_summary(field_id, match, value_query, value_offset)]}
     return {"fields": [{"id": key, "name": meta.get("name"), "required": meta.get("required", False),
                         "schema": meta.get("schema", {}), "has_default": meta.get("hasDefaultValue", False),
                         "allowed_values_total": len(meta.get("allowedValues", []))}
                        for key, meta in fields],
-            "hint": "Für erlaubte Werte erneut mit field_id aufrufen; mit value_query suchen oder value_offset blättern."}
+            "hint": "Call again with field_id for allowed values; search with value_query or paginate with value_offset."}
 
 
 @tool(needs=["jira"])
 def jira_get_myself(ctx: ToolContext) -> dict:
-    """Ermittelt den mit Jira verbundenen Benutzer für 'ich', 'mir', 'meine Tickets'."""
+    """Identifies the connected Jira user for 'I', 'me' and 'my issues'."""
     user = ctx.jira.myself()
     return {k: user.get(k) for k in ("name", "key", "displayName", "active")}
 
 
 @tool(needs=["jira"])
 def jira_list_projects(ctx: ToolContext) -> dict:
-    """Listet die für den Jira-Benutzer sichtbaren Projekte mit ihren Projekt-Keys."""
+    """Lists projects visible to the Jira user and their project keys."""
     return {"projects": ctx.jira.projects()}
 
 
 @tool(needs=["jira"])
 def jira_list_issue_types(ctx: ToolContext, project: str) -> dict:
-    """Liefert erstellbare Tickettypen eines Projekts, einschließlich IDs für Pflichtfeldabfragen.
+    """Lists issue types available for creation in a project, including IDs for required-field queries.
 
-    project: Projekt-Key aus jira_list_projects, z. B. WEST1
-    """
+    project: project key from jira_list_projects, e.g. ABC"""
     return {"issue_types": [{k: t.get(k) for k in ("id", "name", "subtask")}
                             for t in ctx.jira.project_issue_types(project)]}
 
@@ -59,15 +58,14 @@ def jira_list_issue_types(ctx: ToolContext, project: str) -> dict:
 @tool(needs=["jira"])
 def jira_get_create_fields(ctx: ToolContext, project: str, issue_type_id: str, field_id: str = "",
                            value_query: str = "", value_offset: int = 0) -> dict:
-    """Liefert Pflichtfelder, Feldtypen und erlaubte Werte VOR dem Erstellen eines Tickets.
-    IDs und Tickettyp zuerst mit jira_list_issue_types ermitteln. Fehlende Pflichtangaben erfragen.
+    """Returns required fields, field types and allowed values BEFORE creating an issue.
+    First obtain the issue type ID with jira_list_issue_types. Ask for missing required information.
 
-    project: Projekt-Key
-    issue_type_id: numerische Tickettyp-ID aus jira_list_issue_types
-    field_id: optional konkrete Feld-ID für erlaubte Werte; leer = Feldübersicht
-    value_query: optionaler Suchtext in den erlaubten Werten des Felds
-    value_offset: Startposition in erlaubten Werten; jeweils maximal 30
-    """
+    project: project key
+    issue_type_id: numeric issue type ID from jira_list_issue_types
+    field_id: optional field ID for allowed values; empty returns the field overview
+    value_query: optional search text within allowed field values
+    value_offset: start position in allowed values; at most 30 per call"""
     fields = [(f.get("fieldId") or f.get("key") or "", f)
               for f in ctx.jira.create_fields(project, issue_type_id)]
     return summarize_fields(fields, field_id, value_query, value_offset)
@@ -76,22 +74,20 @@ def jira_get_create_fields(ctx: ToolContext, project: str, issue_type_id: str, f
 @tool(needs=["jira"])
 def jira_get_edit_fields(ctx: ToolContext, issue_key: str, field_id: str = "",
                          value_query: str = "", value_offset: int = 0) -> dict:
-    """Zeigt bearbeitbare Felder und deren zulässige Werte für ein bestehendes Ticket.
+    """Lists editable fields and allowed values for an existing issue.
 
-    issue_key: Ticket-Key, z. B. ABC-123
-    field_id: konkrete Feld-ID für Werte; leer = Feldübersicht
-    value_query: optionaler Suchtext in erlaubten Werten
-    value_offset: Startposition in erlaubten Werten; jeweils maximal 30
-    """
+    issue_key: issue key, e.g. ABC-123
+    field_id: specific field ID for values; empty returns the field overview
+    value_query: optional search text within allowed values
+    value_offset: start position in allowed values; at most 30 per call"""
     return summarize_fields(list(ctx.jira.edit_fields(issue_key).items()), field_id, value_query, value_offset)
 
 
 @tool(needs=["jira"])
 def jira_list_transitions(ctx: ToolContext, issue_key: str) -> dict:
-    """Zeigt mögliche Statuswechsel. Nur diese Übergänge darf jira_set_status verwenden.
+    """Lists available status transitions. jira_set_status must use one of these transitions.
 
-    issue_key: Ticket-Key, z. B. ABC-123
-    """
+    issue_key: issue key, e.g. ABC-123"""
     transitions = ctx.jira.transitions(issue_key)
     for transition in transitions:
         transition["fields"] = [field_summary(key, meta) for key, meta in transition["fields"].items()]
@@ -100,22 +96,21 @@ def jira_list_transitions(ctx: ToolContext, issue_key: str) -> dict:
 
 @tool(needs=["jira"])
 def jira_list_priorities(ctx: ToolContext) -> dict:
-    """Listet Jira-Prioritäten mit tatsächlichem Namen und ID (nicht übersetzen oder erraten)."""
+    """Lists Jira priorities with actual names and IDs. Do not translate or guess them."""
     return {"priorities": [{k: p.get(k) for k in ("id", "name", "description")}
                            for p in ctx.jira.priorities()]}
 
 
 @tool(needs=["jira"])
 def jira_list_link_types(ctx: ToolContext) -> dict:
-    """Listet Verknüpfungsarten mit inward/outward-Richtung, z. B. Blocks / blocks / is blocked by."""
+    """Lists issue link types with inward/outward direction, e.g. Blocks / blocks / is blocked by."""
     return {"link_types": ctx.jira.link_types()}
 
 
 @tool(needs=["jira"])
 def jira_get_comments(ctx: ToolContext, issue_key: str, max_results: int = 20) -> dict:
-    """Liest Kommentare eines Tickets.
+    """Reads comments on an issue.
 
-    issue_key: Ticket-Key
-    max_results: Anzahl Kommentare, 1 bis 50
-    """
+    issue_key: issue key
+    max_results: number of comments, 1 to 50"""
     return {"comments": ctx.jira.comments(issue_key, max(1, min(max_results, 50)))}

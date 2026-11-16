@@ -35,7 +35,7 @@ def require_single_worker(argv: list[str]) -> None:
             argv[i + 1] if arg == "--workers" and i + 1 < len(argv) else None)
         if value is not None and value.strip() != "1":
             raise SystemExit("Der Jira-Agent hält Sitzungsdaten im Speicher und muss mit genau 1 Worker laufen "
-                             f"(--workers {value} ist nicht erlaubt).")
+                             f"(--workers {value} is not allowed).")
 
 
 def main():

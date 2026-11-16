@@ -77,7 +77,7 @@ def logout(email: str) -> None:
 def _store(email: str, kind: str, name: str, mime: str, data: bytes, conversation_id: str | None = None) -> str:
     """Legt eine Datei in state.files bzw. state.uploads ab (mit Ablaufzeit und Höchstzahl) und liefert die ID."""
     if len(data) > _MAX_FILE_BYTES:
-        raise ValueError(f"Datei ist zu groß (max. {_MAX_FILE_BYTES // (1024 * 1024)} MB).")
+        raise ValueError(f"File too large (max. {_MAX_FILE_BYTES // (1024 * 1024)} MB).")
     with _lock:
         files = getattr(_get(email), kind)
         now = time.time()

@@ -68,7 +68,7 @@ def test_visual_page_budget_is_shared_across_calls_in_one_run(uploaded):
     assert isinstance(execute(tool,rc,{'file_id':fid,'max_pages':3}),VisualResult)
     assert isinstance(execute(tool,rc,{'file_id':fid,'max_pages':3}),VisualResult)
     result=execute(tool,rc,{'file_id':fid,'max_pages':1})
-    assert result['error']=='ValueError' and 'höchstens 6' in result['details']
+    assert result['error']=='ValueError' and 'most 6' in result['details']
 
 
 @pytest.mark.parametrize('stream',[False,True])

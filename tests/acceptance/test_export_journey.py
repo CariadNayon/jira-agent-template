@@ -78,7 +78,7 @@ def test_export_timeout_is_reported_as_partial(monkeypatch):
     monkeypatch.setattr(tools.time,'monotonic',lambda:next(ticks))
     result=export_issues(jira_with_tickets(),'project = ABC',5000)
     assert len(result['issues'])==100 and result['truncated']
-    assert 'Zeitlimit' in result['warning']
+    assert 'Time limit' in result['warning']
 
 
 def test_chat_search_exposes_continuation_position():

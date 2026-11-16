@@ -1,7 +1,7 @@
 /* Jira-Agent: Anpassung der Databricks-Chat-UI (e2e-chatbot-app-next), eingefügt von jira_agent/web.py.
    - blendet Seitenleiste (Chatverlauf) und die Hinweise "Ephemeral"/"Feedback disabled" aus
-   - Kopfzeile: links der Name des Agenten, rechts "Anleitung", "Neuer Chat" und das Zahnrad
-   - Banner "Jira verbinden", solange kein Jira-Token gesetzt ist
+   - Kopfzeile: links der Agent name, rechts "Guide", "New Chat" und das Zahnrad
+   - Banner "Connect Jira", solange kein Jira-Token gesetzt ist
    - Dateien anhängen (Büroklammer, Strg+V, Drag & Drop) -> /jira/api/upload, Verweis "[Datei: name]" im Text
    - Skill-Vorschläge beim Tippen von "/" (aus /jira/api/skills)
    - Bestätigungs-Button für "ja <CODE>"
@@ -64,7 +64,7 @@
   ].join("\n");
   document.head.appendChild(style);
 
-  /* ---------- Overlay für Einstellungen und Anleitung ---------- */
+  /* ---------- Overlay für Settings und Guide ---------- */
   var overlay = document.createElement("div");
   overlay.id = "jira-overlay";
   overlay.innerHTML = '<div id="jira-panel"><iframe title="Jira Agent"></iframe></div>';
@@ -102,9 +102,9 @@
     b.addEventListener("click", onClick);
     return b;
   }
-  var guideBtn = makeButton("jira-guide-btn", HELP_SVG + "<span>Anleitung</span>", "Anleitung: Agent anpassen und erweitern",
+  var guideBtn = makeButton("jira-guide-btn", HELP_SVG + "<span>Guide</span>", "Guide: customize and extend your agent",
     function () { openPanel("/jira/guide"); });
-  var gearBtn = makeButton("jira-gear", GEAR_SVG, "Einstellungen (Name, Jira, Modell, Datenquellen, Regeln)",
+  var gearBtn = makeButton("jira-gear", GEAR_SVG, "Settings (name, Jira, model, data sources, rules)",
     function () { openPanel("/jira/settings"); });
   var titleEl = document.createElement("span");
   titleEl.id = "jira-agent-title";
@@ -121,8 +121,6 @@
         if (b.parentNode !== right) right.appendChild(b);
       });
       if (titleEl.parentNode !== header) header.insertBefore(titleEl, header.firstChild);
-      var newChat = right.querySelector("button.md\\:hidden span");
-      if (newChat && newChat.textContent === "New Chat") newChat.textContent = "Neuer Chat";
     } else {
       [guideBtn, gearBtn].forEach(function (b) {
         b.classList.add("jira-fixed");
@@ -165,9 +163,9 @@
   var banner = document.createElement("div");
   banner.id = "jira-banner";
   banner.innerHTML =
-    '<b>Jira verbinden:</b><span>Fügen Sie Ihren Jira Personal Access Token ein.</span>' +
-    '<input type="password" autocomplete="off" placeholder="Jira-Token hier einfügen …" aria-label="Jira Personal Access Token">' +
-    '<button type="button">Verbinden</button><a data-help>Wo finde ich den Token?</a><div class="msg"></div>';
+    '<b>Connect Jira:</b><span>Enter your Jira Personal Access Token.</span>' +
+    '<input type="password" autocomplete="off" placeholder="Paste your Jira token here …" aria-label="Jira Personal Access Token">' +
+    '<button type="button">Connect</button><a data-help>Where can I find my token?</a><div class="msg"></div>';
   var bannerInput = banner.querySelector("input");
   var bannerMsg = banner.querySelector(".msg");
   var bannerWanted = false;
@@ -179,23 +177,23 @@
   }
   function connectJira() {
     var token = bannerInput.value.trim();
-    if (!token) { bannerMsg.textContent = "Bitte zuerst den Token einfügen."; return; }
-    bannerMsg.textContent = "Prüfe …";
+    if (!token) { bannerMsg.textContent = "Please enter your token first."; return; }
+    bannerMsg.textContent = "Checking …";
     fetch("/jira/api/credentials", {
       method: "POST", credentials: "same-origin",
       headers: { "Content-Type": "application/json" }, body: JSON.stringify({ jira_token: token })
     }).then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
       .then(function (res) {
-        if (!res.ok) { bannerMsg.textContent = (res.d && res.d.detail) || "Verbindung fehlgeschlagen."; return; }
+        if (!res.ok) { bannerMsg.textContent = (res.d && res.d.detail) || "Connection failed."; return; }
         bannerInput.value = "";
         banner.className = "ok";
-        banner.innerHTML = "<b>Jira verbunden</b><span></span>";
-        banner.querySelector("span").textContent = "als " + res.d.jira_user;
+        banner.innerHTML = "<b>Jira connected</b><span></span>";
+        banner.querySelector("span").textContent = "as " + res.d.jira_user;
         setTimeout(function () { banner.style.display = "none"; }, 3500);
         bannerWanted = false;
         loadMe();
       })
-      .catch(function () { bannerMsg.textContent = "Verbindung fehlgeschlagen."; });
+      .catch(function () { bannerMsg.textContent = "Connection failed."; });
   }
   banner.querySelector("button").addEventListener("click", connectJira);
   bannerInput.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); connectJira(); } });
@@ -211,54 +209,54 @@
     '<path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>';
   var attachBtn = document.createElement("button");
   attachBtn.id = "jira-attach"; attachBtn.type = "button"; attachBtn.innerHTML = CLIP_SVG;
-  attachBtn.title = "Datei anhängen (Bilder, CSV, Excel, PDF, Text) – auch per Strg+V oder Ziehen";
-  attachBtn.setAttribute("aria-label", "Datei anhängen");
+  attachBtn.title = "Attach a file (images, CSV, Excel, PDF, text), paste with Ctrl+V or drag and drop";
+  attachBtn.setAttribute("aria-label", "Attach a file");
   attachBtn.addEventListener("click", function () { fileInput.click(); });
 
   var uploadsInFlight = 0;
   document.addEventListener("submit", function (e) {
     if (uploadsInFlight && e.target && e.target.querySelector && e.target.querySelector("textarea")) {
-      e.preventDefault(); e.stopImmediatePropagation(); showToast("Bitte warten, bis die Anhänge hochgeladen sind.", 5000);
+      e.preventDefault(); e.stopImmediatePropagation(); showToast("Please wait until the attachments have finished uploading.", 5000);
     }
   }, true);
   function uploadFiles(files) {
     files = Array.prototype.slice.call(files || []).map(function (f) {
       if (f.name) return f;
       var ext = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp" }[f.type] || "bin";
-      return new File([f], "eingefuegt-" + Date.now() + "." + ext, { type: f.type });
+      return new File([f], "pasted-" + Date.now() + "." + ext, { type: f.type });
     });
     if (!files.length) return;
     var host = document.querySelector("[data-jira-chat-id]");
     var chatId = host && host.getAttribute("data-jira-chat-id");
-    if (!chatId) { showToast("Der Chat ist noch nicht bereit. Bitte Seite neu laden.", 6000); return; }
+    if (!chatId) { showToast("The chat is not ready yet. Please reload the page.", 6000); return; }
     var allowed = /\.(png|jpe?g|webp|csv|tsv|xlsx|xlsm|pdf|txt|md|json|xml|ya?ml|log|html|sql|py)$/i;
     var invalid = files.find(function (f) { return !allowed.test(f.name || ""); });
-    if (invalid) { showToast("Dateityp nicht unterstützt: " + invalid.name + ". Bilder bitte als PNG, JPEG oder WebP.", 7000); return; }
+    if (invalid) { showToast("Unsupported file type: " + invalid.name + ". Please use PNG, JPEG or WebP for images.", 7000); return; }
     var oversized = files.find(function (f) { return f.size > (/\.(png|jpe?g|webp)$/i.test(f.name) ? 5 : 20) * 1024 * 1024; });
-    if (oversized) { showToast("Datei zu groß: " + oversized.name + ". Bilder maximal 5 MB, andere Dateien 20 MB.", 7000); return; }
+    if (oversized) { showToast("File too large: " + oversized.name + ". Images: maximum 5 MB; other files: 20 MB.", 7000); return; }
     uploadsInFlight += 1;
     var pending = files.map(function (f) {
       return fetch("/jira/api/upload?name=" + encodeURIComponent(f.name) + "&chat_id=" + encodeURIComponent(chatId), {
         method: "POST", credentials: "same-origin",
         headers: { "Content-Type": f.type || "application/octet-stream" }, body: f
-      }).then(function (r) { return r.json().then(function (d) { return r.ok ? d : Promise.reject(d.detail || "Fehler"); }); });
+      }).then(function (r) { return r.json().then(function (d) { return r.ok ? d : Promise.reject(d.detail || "Error"); }); });
     });
-    showToast("Lade " + files.length + " Datei(en) hoch …", 10000);
+    showToast("Uploading " + files.length + " file(s) …", 10000);
     Promise.allSettled(pending).then(function (results) {
       var done = results.filter(function (r) { return r.status === "fulfilled"; }).map(function (r) { return r.value; });
       var failed = results.filter(function (r) { return r.status === "rejected"; });
       // Navigating during upload must never attach files to a different chat's composer.
       var current = document.querySelector("[data-jira-chat-id]");
       if (!current || current.getAttribute("data-jira-chat-id") !== chatId) {
-        showToast("Die Dateien gehören zum vorherigen Chat. Bitte im aktuellen Chat erneut anhängen.", 7000); return;
+        showToast("These files belong to the previous chat. Please attach them again in the current chat.", 7000); return;
       }
       var ta = textarea();
       if (ta && done.length) {
         var refs = done.map(function (d) { return d.reference; }).join(" ");
         setText(ta, (ta.value ? ta.value.replace(/\s*$/, " ") : "") + refs + " "); ta.focus();
       }
-      var text = done.length ? "Hochgeladen: " + done.map(function (d) { return d.name; }).join(", ") : "";
-      if (failed.length) text += (text ? " · " : "") + "Fehlgeschlagen: " + failed.map(function (r) { return String(r.reason); }).join("; ");
+      var text = done.length ? "Uploaded: " + done.map(function (d) { return d.name; }).join(", ") : "";
+      if (failed.length) text += (text ? " · " : "") + "Failed: " + failed.map(function (r) { return String(r.reason); }).join("; ");
       showToast(text, failed.length ? 8000 : 3000);
     }).finally(function () { uploadsInFlight -= 1; });
   }
@@ -345,7 +343,7 @@
   document.addEventListener("click", function (e) { if (!popup.contains(e.target)) hidePopup(); }, true);
 
   /* ---------- Bestätigungs-Button für "ja <CODE>" ---------- */
-  var CODE_RE = /\bja\s+([A-F0-9]{6})\b/;
+  var CODE_RE = /\b(?:yes|ja)\s+([A-F0-9]{6})\b/;
   var used = {};
   function sendText(text) {
     var ta = document.querySelector("textarea");
@@ -377,12 +375,12 @@
       var b = document.createElement("button");
       b.className = "jira-confirm";
       b.dataset.code = code;
-      b.textContent = "Aktion bestätigen (ja " + code + ")";
+      b.textContent = "Approve action (yes " + code + ")";
       b.addEventListener("click", function (ev) {
         var c = ev.currentTarget.dataset.code;
         used[c] = true;
         document.querySelectorAll('.jira-confirm[data-code="' + c + '"]').forEach(function (x) { x.remove(); });
-        sendText("ja " + c);
+        sendText("yes " + c);
       });
       el.insertAdjacentElement("afterend", b);
     }

@@ -17,7 +17,7 @@ class JiraError(Exception):
 class JiraClient:
     def __init__(self, base_url: str, token: str, timeout: int = 30):
         if not token:
-            raise JiraError("Kein Jira-Token angegeben.")
+            raise JiraError("No Jira token provided.")
         self.base_url = base_url.rstrip("/")
         self._headers = {"Authorization": f"Bearer {token}", "Accept": "application/json"}
         self._timeout = timeout
@@ -33,35 +33,35 @@ class JiraClient:
         try:
             r = self.request("GET", "/myself")
         except requests.RequestException as e:
-            raise JiraError(f"Jira nicht erreichbar: {type(e).__name__}") from None
+            raise JiraError(f"Jira is unreachable: {type(e).__name__}") from None
         if r.status_code != 200 or "json" not in r.headers.get("Content-Type", ""):
-            raise JiraError(f"Jira-Anmeldung fehlgeschlagen (HTTP {r.status_code}).")
+            raise JiraError(f"Jira sign-in failed (HTTP {r.status_code}).")
         return r.json()
 
     @staticmethod
     def check_key(issue_key: str) -> str:
         key = (issue_key or "").strip().upper()
         if not KEY_RE.fullmatch(key):
-            raise ValueError(f"Ungültiger Ticket-Key: {key!r}")
+            raise ValueError(f"Invalid issue key: {key!r}")
         return key
 
     @staticmethod
     def check_user(user_name: str) -> str:
         if not USER_RE.fullmatch(user_name or ""):
-            raise ValueError(f"Ungültiger Nutzername: {user_name!r}")
+            raise ValueError(f"Invalid username: {user_name!r}")
         return user_name
 
     @staticmethod
     def check_project(project: str) -> str:
         key = (project or "").strip().upper()
         if not PROJECT_RE.fullmatch(key):
-            raise ValueError("Ungültiger Projekt-Key.")
+            raise ValueError("Invalid project key.")
         return key
 
     @staticmethod
     def check_text(text: str, name: str, limit: int) -> str:
         if not isinstance(text, str) or not text.strip() or len(text) > limit:
-            raise ValueError(f"{name}: 1–{limit} Zeichen erforderlich.")
+            raise ValueError(f"{name}: 1–{limit} characters required.")
         return text
 
     def resolve_user(self, user_name: str) -> str:
@@ -80,7 +80,7 @@ class JiraClient:
             page = self._call("GET", path, params={"startAt": start, "maxResults": 100})
             values = page.get("values")
             if not isinstance(values, list):
-                raise JiraError("Unerwartetes Format der Jira-Metadaten (values fehlt).")
+                raise JiraError("Unexpected Jira metadata format (missing values).")
             result.extend(values)
             next_start = start + len(values)
             total = page.get("total")
@@ -90,16 +90,16 @@ class JiraClient:
                         and len(values) < page.get("maxResults", 100))):
                 return result
             if not values:
-                raise JiraError("Jira-Metadaten konnten nicht vollständig geladen werden.")
+                raise JiraError("Jira metadata could not be loaded completely.")
             start = next_start  # Jira may enforce a smaller page size than requested.
-        raise JiraError("Zu viele Jira-Metadaten. Bitte das Projekt genauer eingrenzen.")
+        raise JiraError("Too much Jira metadata. Please narrow down the project.")
 
     def project_issue_types(self, project: str) -> list[dict]:
         return self._metadata_pages(f"/issue/createmeta/{self.check_project(project)}/issuetypes")
 
     def create_fields(self, project: str, issue_type_id: str) -> list[dict]:
         if not re.fullmatch(r"[0-9]+", issue_type_id or ""):
-            raise ValueError("Tickettyp-ID muss numerisch sein (siehe Projekt-Tickettypen).")
+            raise ValueError("Issue type ID must be numeric (see project issue types).")
         return self._metadata_pages(
             f"/issue/createmeta/{self.check_project(project)}/issuetypes/{issue_type_id}")
 
@@ -119,16 +119,16 @@ class JiraClient:
         try:
             r = self.request(method, path, **kwargs)
         except requests.RequestException as e:
-            raise JiraError(f"Jira nicht erreichbar: {type(e).__name__}") from None
+            raise JiraError(f"Jira is unreachable: {type(e).__name__}") from None
         if r.status_code not in ok:
-            raise JiraError(f"Jira-Fehler (HTTP {r.status_code}): {r.text[:300]}")
+            raise JiraError(f"Jira error (HTTP {r.status_code}): {r.text[:300]}")
         return r.json() if r.content else {}
 
     def search(self, jql: str, max_results: int = 20, fields: str = "summary,status,priority,assignee,updated",
                start_at: int = 0) -> dict:
         """Tickets per JQL. Liefert {"total": n, "issues": [...]} (Rohdaten von Jira)."""
         if start_at < 0:
-            raise ValueError("start_at darf nicht negativ sein.")
+            raise ValueError("start_at must not be negative.")
         return self._call("GET", "/search", params={"jql": jql, "startAt": int(start_at), "maxResults": max(1, min(int(max_results), 100)),
                                                      "fields": fields})
 
@@ -140,7 +140,7 @@ class JiraClient:
         """Legt ein Ticket an und liefert den neuen Key. Weitere Felder z. B. priority="High",
         components=["Bremse"], labels=["x"], assignee="user.name" oder customfield_10010=..."""
         data = {"project": {"key": self.check_project(project)},
-                "summary": self.check_text(summary, "Titel", 255),
+                "summary": self.check_text(summary, "Summary", 255),
                 "issuetype": {"name": self.check_text(issue_type, "Tickettyp", 255)}, "description": description}
         for name, value in fields.items():
             if name == "assignee" and isinstance(value, str):
@@ -165,15 +165,15 @@ class JiraClient:
         options = self.transitions(issue_key)
         matches = [t for t in options if wanted in (t["id"], t["name"].lower(), (t["to"] or "").lower())]
         if not matches:
-            raise JiraError(f"Statuswechsel '{name_or_id}' nicht möglich. Möglich: {[t['name'] for t in options]}")
+            raise JiraError(f"Transition '{name_or_id}' is unavailable. Available: {[t['name'] for t in options]}")
         if len(matches) > 1:
-            raise JiraError("Mehrere Statuswechsel passen. Bitte die konkrete Übergangs-ID angeben.")
+            raise JiraError("Multiple transitions match. Please provide the specific transition ID.")
         match = matches[0]
         body: dict = {"transition": {"id": match["id"]}}
         if fields:
             unknown = set(fields) - set(match["fields"])
             if unknown:
-                raise ValueError(f"Felder im Statuswechsel nicht verfügbar: {sorted(unknown)}")
+                raise ValueError(f"Fields unavailable for this transition: {sorted(unknown)}")
             body["fields"] = fields
         if comment:
             body["update"] = {"comment": [{"add": {"body": comment}}]}
@@ -183,7 +183,7 @@ class JiraClient:
         self._call("PUT", f"/issue/{self.check_key(issue_key)}/assignee", json={"name": self.resolve_user(user_name)})
 
     def comment(self, issue_key: str, text: str) -> None:
-        self._call("POST", f"/issue/{self.check_key(issue_key)}/comment", json={"body": self.check_text(text, "Kommentar", 32767)})
+        self._call("POST", f"/issue/{self.check_key(issue_key)}/comment", json={"body": self.check_text(text, "Comment", 32767)})
 
     def comments(self, issue_key: str, max_results: int = 20) -> list[dict]:
         data = self._call("GET", f"/issue/{self.check_key(issue_key)}/comment",
@@ -210,7 +210,7 @@ class JiraClient:
     def add_worklog(self, issue_key: str, time_spent: str, comment: str = "") -> None:
         """Arbeitszeit buchen, time_spent im Jira-Format, z. B. "1h 30m"."""
         if not re.fullmatch(r"(?:[1-9][0-9]*[wdhm])(?:\s+[1-9][0-9]*[wdhm])*", time_spent or ""):
-            raise ValueError("Arbeitszeit z. B. als 1h 30m angeben.")
+            raise ValueError("Provide work duration in Jira format, e.g. 1h 30m.")
         self._call("POST", f"/issue/{self.check_key(issue_key)}/worklog",
                    json={"timeSpent": time_spent, "comment": comment})
 

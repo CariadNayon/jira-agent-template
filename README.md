@@ -3,7 +3,7 @@
 Persönlicher Jira- und Daten-Assistent als fertige Databricks App, gebaut mit OpenAI Agents SDK, MLflow `AgentServer` und Azure OpenAI.
 
 **Was der Agent kann**
-- **Jira** (mit dem persönlichen Token des Nutzers): Tickets suchen, erstellen und bearbeiten; Benutzer, Projekte, Tickettypen und Pflichtfelder ermitteln; Bearbeiter, Status und Priorität setzen; kommentieren, Labels setzen, Tickets verknüpfen und Arbeitszeit buchen. Jede Änderung braucht die Bestätigung „ja <CODE>“.
+- **Jira** (mit dem persönlichen Token des Nutzers): Tickets suchen, erstellen und bearbeiten; Benutzer, Projekte, Tickettypen und Pflichtfelder ermitteln; Bearbeiter, Status und Priorität setzen; kommentieren, Labels setzen, Tickets verknüpfen und Arbeitszeit buchen. Jede Änderung braucht die Bestätigung „yes <CODE>“.
 - **Daten** (mit den Rechten des Nutzers): freigegebene Unity-Catalog-Tabellen beschreiben und per `SELECT` über das SQL Warehouse abfragen.
 - **Anhänge**: PNG/JPEG/WebP werden über eindeutige Dateireferenzen als echte Bild-Eingaben an das Modell übergeben. CSV, XLSX/XLSM und Text können gelesen werden. PDF-Text wird seitenweise gelesen; Scan-PDFs werden mit PDFium gerendert und an das Bildmodell übergeben. Tabellen lassen sich über alle eingelesenen Zeilen filtern, gruppieren, berechnen, als Diagramm darstellen und exportieren. Anhänge sind benutzer- und chatbezogen; Bilder benötigen ein bildfähiges Azure-Deployment.
 - **Ausgaben**: Diagramme (Balken, Linie, Torte, Streuung) sowie CSV- und Excel-Exporte.
@@ -27,12 +27,12 @@ Die Regeln für die KI stehen in [AGENTS.md](AGENTS.md), die Abläufe in [.claud
 Jira ist der Basis-Anwendungsfall. Die Laufzeit, Tool-Registrierung, Bestätigungen und Skills können für eigene Agenten wiederverwendet werden. [Erweiterungsleitfaden](docs/EXTENDING.md): Architektur, Tool-Auswahl über `agent.enabled_tools`, neue Integrationen und Tests.
 
 Beispiele im Chat:
-- „Erstelle ein Testticket im Projekt ABC und weise es mir zu.“ Der Agent klärt Tickettyp und Pflichtfelder, zeigt eine Vorschau und wartet auf `ja CODE`.
+- „Erstelle ein Testticket im Projekt ABC und weise es mir zu.“ Der Agent klärt Tickettyp und Pflichtfelder, zeigt eine Vorschau und wartet auf `yes CODE`.
 - „Welche Statuswechsel sind für ABC-123 möglich?“
 - „Ändere die Beschreibung von ABC-123 auf …“
 - „Verknüpfe ABC-123 so, dass es ABC-456 blockiert.“
-- `/datei-auswertung` führt durch Dokument- und Tabellenanalysen.
-- `/ticket-entwurf` führt durch einen wiederverwendbaren Erstellungsablauf.
+- `/file-analysis` führt durch Dokument- und Tabellenanalysen.
+- `/issue-draft` führt durch einen wiederverwendbaren Erstellungsablauf.
 
 Jira-Zugangsdaten ausschließlich im Feld **Jira verbinden** oder unter Zahnrad → Zugänge einfügen, niemals als Chatnachricht. Die tatsächlichen Projektberechtigungen gelten weiterhin. Die Integration unterstützt Jira Data Center; Jira Cloud benötigt Anpassungen.
 

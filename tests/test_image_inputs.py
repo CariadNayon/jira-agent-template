@@ -71,7 +71,7 @@ def test_image_size_dimensions_and_disabled_model_are_explicit(client,monkeypatc
     assert client.post('/jira/api/upload?name=pixels.png',content=picture()).status_code == 415
     monkeypatch.setitem(CFG['llm'],'supports_images',False)
     r=client.post('/jira/api/upload?name=image.png',content=picture())
-    assert r.status_code == 415 and 'deaktiviert' in r.text
+    assert r.status_code == 415 and 'disabled' in r.text
 
 
 @pytest.mark.parametrize('ext,fmt,mime',[('png','PNG','image/png'),('jpg','JPEG','image/jpeg'),('webp','WEBP','image/webp')])
@@ -89,9 +89,9 @@ def test_chat_reference_selects_exact_file_among_identical_names(client):
     assert sink.get(a['id']) is not None
     assert sink.get(b['id']) is None
     assert sink.get(other['id']) is None
-    with pytest.raises(ValueError,match='anderen Chat'):
+    with pytest.raises(ValueError,match='another chat'):
         prepare_uploads(EMAIL,[{'role':'user','content':a['reference']}],'chat-b',images_enabled=True)
-    with pytest.raises(ValueError,match='nicht eindeutig'):
+    with pytest.raises(ValueError,match='ambiguous'):
         prepare_uploads(EMAIL,[{'role':'user','content':'[Datei: image.png]'}],'chat-a',images_enabled=True)
 
 
@@ -116,10 +116,10 @@ def test_followup_keeps_image_but_does_not_duplicate_payload(client):
 def test_expiry_and_wrong_owner_never_send_image_bytes(client):
     f=upload(client)
     stored=UploadSink(EMAIL).get(f['id'])
-    with pytest.raises(ValueError,match='Anhang fehlt'):
+    with pytest.raises(ValueError,match='Attachment missing'):
         prepare_uploads('other@example.test',[{'role':'user','content':f['reference']}],'chat-a',images_enabled=True)
     stored.created=time.time()-3601
-    with pytest.raises(ValueError,match='abgelaufen'):
+    with pytest.raises(ValueError,match='expired'):
         prepare_uploads(EMAIL,[{'role':'user','content':f['reference']}],'chat-a',images_enabled=True)
     _,history=prepare_uploads(EMAIL,[{'role':'user','content':f['reference']},
         {'role':'user','content':'Neue Frage'}],'chat-a',images_enabled=True)
@@ -128,11 +128,11 @@ def test_expiry_and_wrong_owner_never_send_image_bytes(client):
 
 def test_api_upload_binds_on_first_explicit_use_and_requires_chat_id(client):
     f=client.post('/jira/api/upload?name=image.png',content=picture()).json()
-    with pytest.raises(ValueError,match='Gesprächskennung'):
+    with pytest.raises(ValueError,match='conversation ID'):
         prepare_uploads(EMAIL,[{'role':'user','content':f['reference']}],'',images_enabled=True)
     prepare_uploads(EMAIL,[{'role':'user','content':f['reference']}],'chat-a',images_enabled=True)
     assert UploadSink(EMAIL).get(f['id']).conversation_id == 'chat-a'
-    with pytest.raises(ValueError,match='anderen Chat'):
+    with pytest.raises(ValueError,match='another chat'):
         prepare_uploads(EMAIL,[{'role':'user','content':f['reference']}],'chat-b',images_enabled=True)
 
 
@@ -189,7 +189,7 @@ def test_real_sdk_sends_image_to_azure_for_both_agent_paths(client,monkeypatch,s
 def test_current_message_image_limits_are_not_silently_truncated(client,monkeypatch):
     files=[upload(client,name=f'image-{n}.png') for n in range(5)]
     messages=[{'role':'user','content':' '.join(f['reference'] for f in files)}]
-    with pytest.raises(ValueError,match='höchstens 4'):
+    with pytest.raises(ValueError,match='at most 4'):
         prepare_uploads(EMAIL,messages,'chat-a',images_enabled=True)
     monkeypatch.setattr('jira_agent.uploads._MAX_IMAGE_TOTAL',len(picture())+1)
     with pytest.raises(ValueError,match='10 MB'):

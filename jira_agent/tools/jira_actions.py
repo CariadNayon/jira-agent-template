@@ -13,7 +13,7 @@ from jira_agent.tools import ToolContext, tool
 
 def _labels(labels: list[str]) -> list[str]:
     if any(not isinstance(x, str) or not re.fullmatch(r"[A-Za-z0-9_.-]{1,64}", x) for x in labels):
-        raise ValueError("Labels: 1–64 Zeichen, nur Buchstaben, Ziffern, _ - .")
+        raise ValueError("Labels: 1–64 characters, letters, digits, _ - . only.")
     return labels
 
 
@@ -22,24 +22,23 @@ def jira_create_issue(ctx: ToolContext, project: str, summary: str, issue_type: 
                       description: str = "", assignee: str = "", priority: str = "",
                       components: list[str] | None = None, labels: list[str] | None = None,
                       extra_fields: dict | None = None) -> dict:
-    """Erstellt ein Jira-Ticket nach Nutzerbestätigung. Zuerst Projekt, Tickettypen und Pflichtfelder
-    mit den Metadaten-Tools prüfen. Fehlende Angaben erfragen; keine Pflichtwerte erfinden.
+    """Creates a Jira issue after user approval. First check the project, issue types and required fields
+    with the metadata tools. Ask for missing information; never invent required values.
 
-    project: bestätigter Projekt-Key
-    summary: Titel, maximal 255 Zeichen
-    issue_type: tatsächlicher Tickettyp-Name aus jira_list_issue_types
-    description: Beschreibung
-    assignee: Jira-Kennung oder @me für den mit Jira verbundenen Benutzer; leer = Projektstandard
-    priority: tatsächlicher Prioritätsname; leer = Projektstandard
-    components: Komponentennamen aus den Create-Metadaten
-    labels: Labels ohne Leerzeichen
-    extra_fields: zusätzliche Jira-Felder im API-Format aus den Metadaten, z. B. customfield_10010 oder parent
-    """
+    project: confirmed project key
+    summary: issue summary, at most 255 characters
+    issue_type: actual issue type name from jira_list_issue_types
+    description: issue description
+    assignee: Jira username or @me for the connected Jira user; empty uses the project default
+    priority: actual priority name; empty uses the project default
+    components: component names from create metadata
+    labels: labels without spaces
+    extra_fields: additional Jira fields in API format from metadata, e.g. customfield_10010 or parent"""
     fields = dict(extra_fields or {})
     if set(fields) & {"project", "summary", "issuetype", "description", "assignee", "priority", "components", "labels"}:
-        raise ValueError("Standardfelder über die benannten Parameter angeben, nicht über extra_fields.")
+        raise ValueError("Provide standard fields through their named parameters, not extra_fields.")
     if any(not re.fullmatch(r"[A-Za-z][A-Za-z0-9_]*", k) for k in fields):
-        raise ValueError("Ungültige Feld-ID.")
+        raise ValueError("Invalid field ID.")
     if assignee:
         fields["assignee"] = assignee
     if priority:
@@ -54,21 +53,20 @@ def jira_create_issue(ctx: ToolContext, project: str, summary: str, issue_type: 
 
 @tool(write=True, needs=["jira"])
 def jira_update_issue(ctx: ToolContext, issue_key: str, fields: dict) -> dict:
-    """Ändert Felder eines bestehenden Tickets. Zuerst jira_get_edit_fields lesen.
-    Die übergebenen Werte ersetzen den jeweiligen Feldinhalt; unveränderte Felder weglassen.
-    Für Statuswechsel jira_set_status, für Zuweisung jira_assign verwenden.
+    """Updates fields of an existing issue. Read jira_get_edit_fields first.
+    Provided values replace the corresponding field content; omit unchanged fields.
+    Use jira_set_status for status changes and jira_assign for assignment.
 
-    issue_key: Ticket-Key
-    fields: Felder im Jira-API-Format, z. B. {"summary":"Neuer Titel"} oder {"priority":{"name":"High"}}
-    """
+    issue_key: issue key
+    fields: fields in Jira API format, e.g. {"summary":"New summary"} or {"priority":{"name":"High"}}"""
     if not fields or set(fields) & {"project", "issuetype", "status", "assignee"}:
-        raise ValueError("Felder fehlen oder enthalten Projekt, Tickettyp, Status oder Bearbeiter. Spezifische Tools verwenden.")
+        raise ValueError("Fields are missing or include project, issue type, status or assignee. Use the specific tools.")
     editable = ctx.jira.edit_fields(issue_key)
     unknown = set(fields) - set(editable)
     if unknown:
-        raise ValueError(f"Nicht bearbeitbare Felder: {', '.join(sorted(unknown))}")
+        raise ValueError(f"Fields that cannot be edited: {', '.join(sorted(unknown))}")
     if "summary" in fields:
-        JiraClient.check_text(fields["summary"], "Titel", 255)
+        JiraClient.check_text(fields["summary"], "Summary", 255)
     if "labels" in fields:
         _labels(fields["labels"])
     ctx.jira.update_fields(issue_key, **fields)
@@ -78,50 +76,46 @@ def jira_update_issue(ctx: ToolContext, issue_key: str, fields: dict) -> dict:
 @tool(write=True, needs=["jira"])
 def jira_set_status(ctx: ToolContext, issue_key: str, status: str, comment: str = "",
                     fields: dict | None = None) -> dict:
-    """Ändert den Ticketstatus über einen verfügbaren Übergang; vorher jira_list_transitions lesen.
+    """Changes issue status using an available transition; read jira_list_transitions first.
 
-    issue_key: Ticket-Key
-    status: Name/ID eines verfügbaren Übergangs oder dessen Zielstatus
-    comment: optionaler begleitender Kommentar
-    fields: zusätzliche Felder des Übergangs aus jira_list_transitions, z. B. resolution
-    """
+    issue_key: issue key
+    status: name/ID of an available transition or its target status
+    comment: optional accompanying comment
+    fields: additional transition fields from jira_list_transitions, e.g. resolution"""
     ctx.jira.transition(issue_key, status, comment, fields)
     return {"status": "OK"}
 
 
 @tool(write=True, needs=["jira"])
 def jira_set_priority(ctx: ToolContext, issue_key: str, priority: str) -> dict:
-    """Setzt die Priorität. Vorher gültige Namen mit jira_list_priorities abfragen.
+    """Sets issue priority. Query valid names with jira_list_priorities first.
 
-    issue_key: Ticket-Key
-    priority: tatsächlicher Prioritätsname
-    """
-    ctx.jira.set_priority(issue_key, JiraClient.check_text(priority, "Priorität", 255))
+    issue_key: issue key
+    priority: actual priority name"""
+    ctx.jira.set_priority(issue_key, JiraClient.check_text(priority, "Priority", 255))
     return {"status": "OK"}
 
 
 @tool(write=True, needs=["jira"])
 def jira_link_issues(ctx: ToolContext, from_key: str, to_key: str, link_type: str) -> dict:
-    """Verknüpft zwei Tickets. Vorher jira_list_link_types lesen und Richtung ausdrücklich nennen:
-    from_key ist outwardIssue, to_key inwardIssue, z. B. from_key blocks to_key bei Blocks.
+    """Links two issues. Read jira_list_link_types first and explicitly describe the direction:
+    from_key is outwardIssue and to_key is inwardIssue, e.g. from_key blocks to_key for Blocks.
 
-    from_key: Ausgangsticket (outwardIssue)
-    to_key: Zielticket (inwardIssue)
-    link_type: tatsächlicher Name der Verknüpfungsart
-    """
+    from_key: source issue (outwardIssue)
+    to_key: target issue (inwardIssue)
+    link_type: actual link type name"""
     if JiraClient.check_key(from_key) == JiraClient.check_key(to_key):
-        raise ValueError("Ein Ticket kann nicht mit sich selbst verknüpft werden.")
-    ctx.jira.link(from_key, to_key, JiraClient.check_text(link_type, "Verknüpfungsart", 255))
+        raise ValueError("An issue cannot be linked to itself.")
+    ctx.jira.link(from_key, to_key, JiraClient.check_text(link_type, "Link type", 255))
     return {"status": "OK"}
 
 
 @tool(write=True, needs=["jira"])
 def jira_add_worklog(ctx: ToolContext, issue_key: str, time_spent: str, comment: str = "") -> dict:
-    """Bucht Arbeitszeit auf ein Ticket. Erst nach ausdrücklicher Bestätigung ausführen.
+    """Logs work on an issue. Execute only after explicit approval.
 
-    issue_key: Ticket-Key
-    time_spent: Jira-Dauer, z. B. 1h 30m oder 2d
-    comment: Beschreibung der geleisteten Arbeit
-    """
+    issue_key: issue key
+    time_spent: Jira duration, e.g. 1h 30m or 2d
+    comment: description of the work performed"""
     ctx.jira.add_worklog(issue_key, time_spent, comment)
     return {"status": "OK"}

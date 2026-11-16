@@ -23,12 +23,11 @@ _LABEL_RE = re.compile(r"[A-Za-z0-9_\-.]{1,64}")
 
 @tool(write=True, needs=["jira"])
 def jira_add_label(ctx: ToolContext, issue_key: str, label: str) -> dict:
-    """Setzt ein Label an einem Jira-Ticket, z. B. 'auto-routed'.
+    """Adds a label to a Jira issue, e.g. 'auto-routed'.
 
-    issue_key: Ticket-Key, z. B. ABC-123
-    label: Label ohne Leerzeichen (Buchstaben, Ziffern, _ - .)
-    """
+    issue_key: issue key, e.g. ABC-123
+    label: label without spaces (letters, digits, _ - .)"""
     if not _LABEL_RE.fullmatch(label or ""):
-        raise ValueError("Labels dürfen nur Buchstaben, Ziffern, _ - . enthalten (ohne Leerzeichen).")
+        raise ValueError("Labels may contain only letters, digits, _ - . (no spaces).")
     ctx.jira.add_label(issue_key, label)
     return {"status": "OK"}

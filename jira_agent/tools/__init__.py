@@ -126,7 +126,7 @@ def tool(description: str | Callable | None = None, parameters: dict | None = No
 
     Kurzform: @tool oder @tool(write=True, needs=["jira"]) – Beschreibung und Parameter kommen aus
     Docstring und Type-Hints. Langform (explizites JSON-Schema) bleibt möglich:
-    @tool("Beschreibung", {"x": {"type": "string"}}, ["x"]).
+    @tool("Description", {"x": {"type": "string"}}, ["x"]).
     """
     def deco(fn: Callable) -> Callable:
         tool_name = name or fn.__name__
@@ -135,7 +135,7 @@ def tool(description: str | Callable | None = None, parameters: dict | None = No
             doc_desc, params, req = infer_schema(fn)
             desc = description if isinstance(description, str) and description else doc_desc
         if not desc:
-            raise ValueError(f"Tool {tool_name}: Beschreibung fehlt (Docstring ergänzen).")
+            raise ValueError(f"Tool {tool_name}: missing description (add a docstring).")
         existing = REGISTRY.get(tool_name)
         if existing and existing.func.__module__ != fn.__module__:
             raise ValueError(f"Tool-Name doppelt vergeben: {tool_name}")
@@ -161,5 +161,5 @@ def json_schema(t: Tool) -> dict:
     if t.write:
         props["confirmation_code"] = {
             "type": "string",
-            "description": "Nur setzen, nachdem der Nutzer mit 'ja <CODE>' bestätigt hat. Beim ersten Aufruf weglassen."}
+            "description": "Only set after the user has approved with 'yes <CODE>'. Omit on the first call."}
     return {"type": "object", "properties": props, "required": list(t.required)}

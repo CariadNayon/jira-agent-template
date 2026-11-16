@@ -63,7 +63,7 @@ Für eine andere Integration einen eigenen Client und bei Bedarf eine zusätzlic
 
 ## Einen Ablauf als Skill speichern
 
-Ein Skill kann vorhandene Tools kombinieren, aber keine neuen Berechtigungen oder technischen Fähigkeiten schaffen. Beispiel: `/ticket-entwurf` im Ordner `skills/`. Er erfragt Projekt und Pflichtfelder, erstellt einen Entwurf und ruft das Schreib-Tool erst für die Vorschau auf. Team-Skills erscheinen nach dem Deployment bei allen Nutzern dieser App.
+Ein Skill kann vorhandene Tools kombinieren, aber keine neuen Berechtigungen oder technischen Fähigkeiten schaffen. Beispiel: `/issue-draft` im Ordner `skills/`. Er erfragt Projekt und Pflichtfelder, erstellt einen Entwurf und ruft das Schreib-Tool erst für die Vorschau auf. Team-Skills erscheinen nach dem Deployment bei allen Nutzern dieser App.
 
 Die Dateien unter `.claude/skills/` sind dagegen Arbeitsanleitungen für die KI, die den Code entwickelt. Für Copilot `AGENTS.md` und die passende Arbeitsanleitung explizit mitgeben.
 
@@ -99,7 +99,7 @@ Für selbst gestartete SDK-Läufe `jira_agent.model_input.make_run_config()` ver
 
 Grenzen: 100.000 Datenzeilen, 200 Spalten und 2 Millionen Zellen; entpackte Excel-Dateien maximal 100 MB. Bei Überschreitung gibt es eine Fehlermeldung statt einer stillen Teilberechnung. `max_rows` begrenzt nur die Ergebnisvorschau. Diagramme enthalten maximal 50 Punkte und kennzeichnen ausgelassene/leere Werte. `export_uploaded_table` exportiert alle gefilterten/berechneten Ergebniszeilen innerhalb der Eingabegrenzen, unabhängig vom Vorschau-Limit. XLSX-Textzellen bleiben Text; potenzielle CSV-Formeln erhalten ein führendes Apostroph.
 
-Der Team-Skill `/datei-auswertung` verbindet diese Fähigkeiten zu einem wiederverwendbaren Ablauf.
+Der Team-Skill `/file-analysis` verbindet diese Fähigkeiten zu einem wiederverwendbaren Ablauf.
 
 ## Jira-Verhalten und Grenzen
 
@@ -108,7 +108,7 @@ Der Team-Skill `/datei-auswertung` verbindet diese Fähigkeiten zu einem wiederv
 - `extra_fields` enthält projektspezifische Felder im Jira-API-Format, z. B. `{"customfield_10010": {"id": "42"}}`. Die IDs und Pflichtwerte müssen aus den Metadaten oder vom Nutzer kommen. Für Unteraufgaben muss u. a. ein zulässiger Unteraufgabentyp und `parent` mitgegeben werden; Jira prüft die Regeln des Projekts.
 - Bearbeiten ersetzt nur die angegebenen Felder. `jira_get_edit_fields` zeigt die Felder an, die der konkrete Benutzer am konkreten Ticket bearbeiten darf.
 - Statuswechsel verwenden die realen Workflow-Übergänge. Zusätzliche Übergangsfelder können über `fields` angegeben werden, sofern Jira sie in den Übergangsmetadaten ausweist. Jira prüft Pflichtfelder und Workflow-Regeln abschließend.
-- Änderungen werden einzeln mit `ja CODE` bestätigt. Ein Vorschlag ist 10 Minuten gültig; sein Code wird vor der Ausführung atomar verbraucht. Er ist an Benutzer-Sitzung, Gespräch, Jira-Identität, Tool und unveränderte Argumente gebunden. Tickettexte und Datei-Inhalte gelten nicht als Bestätigung.
+- Änderungen werden einzeln mit `yes CODE` bestätigt. Ein Vorschlag ist 10 Minuten gültig; sein Code wird vor der Ausführung atomar verbraucht. Er ist an Benutzer-Sitzung, Gespräch, Jira-Identität, Tool und unveränderte Argumente gebunden. Tickettexte und Datei-Inhalte gelten nicht als Bestätigung.
 - Aktionsbelege liegen im `ActionLedger` der Benutzer-Sitzung. Ein wiederholter bestätigter Aufruf liefert das gespeicherte Ergebnis statt einer zweiten Änderung. Während der Ausführung kommt `AKTION_LAEUFT`. Fehler/Timeouts bleiben als ungeklärtes Ergebnis gesperrt: zuerst in Jira prüfen. Die Sperre gilt auch, wenn das Modell den Code bei einer Wiederholung weglässt.
 - Soll dieselbe erfolgreiche Aktion absichtlich erneut ausgeführt werden, ist ein neuer Nutzerauftrag mit neuer Vorschau und neuem Code erforderlich. Derselbe alte Code liefert weiterhin nur seinen Beleg. Geänderte Argumente benötigen ebenfalls einen neuen Code.
 - Der Frontend-Build deaktiviert automatische `streamText`-Wiederholungen und den Wechsel zu einem zweiten `generateText`-Agentenlauf nach Transportfehlern. Bereits übertragene Tool-Ergebnisse bleiben sichtbar; der Chat zeigt einen Fehlerhinweis und fordert zur Prüfung auf. Ein leerer Stream beweist nicht, dass Jira nichts ausgeführt hat.

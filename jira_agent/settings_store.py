@@ -35,7 +35,7 @@ def sanitize(settings: dict) -> dict:
 
 def settings_path(email: str) -> str:
     if not _EMAIL_RE.fullmatch(email or ""):
-        raise ValueError("Ungültige Nutzerkennung.")
+        raise ValueError("Invalid user identity.")
     return f"/Users/{email}/.jira-agent/settings.json"
 
 

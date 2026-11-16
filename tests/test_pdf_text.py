@@ -20,9 +20,9 @@ def test_empty_text_is_marked_for_visual_reading_and_paging_is_explicit():
 
 
 def test_protected_and_corrupt_pdf_have_useful_errors():
-    with pytest.raises(ValueError,match='passwortgeschützt'):read_pdf(pdf(password='secret'))
-    with pytest.raises(ValueError,match='beschädigt'):read_pdf(b'not a pdf')
-    with pytest.raises(ValueError,match='Startseite'):read_pdf(pdf(),start_page=99)
+    with pytest.raises(ValueError,match='password protected'):read_pdf(pdf(password='secret'))
+    with pytest.raises(ValueError,match='damaged'):read_pdf(b'not a pdf')
+    with pytest.raises(ValueError,match='Start page'):read_pdf(pdf(),start_page=99)
 
 
 def text_pdf(text):

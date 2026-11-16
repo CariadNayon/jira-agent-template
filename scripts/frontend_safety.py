@@ -19,17 +19,17 @@ _SAFE_DRAIN = _SIGNATURE + """
     for (let chunk = await reader.read(); !chunk.done; chunk = await reader.read()) {
       if (chunk.value.type === 'error') {
         writer.write({ type: 'data-error', data:
-          (chunk.value.errorText || 'Die Anfrage ist fehlgeschlagen.')
-          + ' Es erfolgt keine automatische Wiederholung. '
-          + 'Prüfe vor einem erneuten Versuch, ob eine Jira-Änderung bereits übernommen wurde.' });
+          (chunk.value.errorText || 'The request failed.')
+          + ' No automatic retry will be made. '
+          + 'Before retrying, check whether a Jira change was already applied.' });
         return { failed: false };
       }
       writer.write(chunk.value);
     }
   } catch (error) {
     writer.write({ type: 'data-error', data:
-      'Die Verbindung wurde unterbrochen. Der Agent wurde nicht erneut gestartet. '
-      + 'Eine Jira-Aktion kann noch laufen oder bereits ausgeführt sein. Bitte zuerst prüfen.' });
+      'The connection was interrupted. The agent was not restarted. '
+      + 'A Jira action may still be running or may already have completed. Please check first.' });
   } finally {
     reader.releaseLock();
   }
@@ -37,6 +37,9 @@ _SAFE_DRAIN = _SIGNATURE + """
 }
 """
 
+
+# Upgrade messages in already-patched local frontends as well as fresh downloads.
+_LEGACY_MESSAGES = {'Die Anfrage ist fehlgeschlagen.': 'The request failed.', ' Es erfolgt keine automatische Wiederholung. ': ' No automatic retry will be made. ', 'Prüfe vor einem erneuten Versuch, ob eine Jira-Änderung bereits übernommen wurde.': 'Before retrying, check whether a Jira change was already applied.', 'Die Verbindung wurde unterbrochen. Der Agent wurde nicht erneut gestartet. ': 'The connection was interrupted. The agent was not restarted. ', 'Eine Jira-Aktion kann noch laufen oder bereits ausgeführt sein. Bitte zuerst prüfen.': 'A Jira action may still be running or may already have completed. Please check first.'}
 
 def ensure_frontend_safety(frontend: Path) -> None:
     route = frontend / "server/src/routes/chat.ts"
@@ -56,6 +59,8 @@ def ensure_frontend_safety(frontend: Path) -> None:
         if "reader.releaseLock()" not in original or "receivedTextChunk" not in original:
             raise RuntimeError("Chat-Frontend geändert: Streaming-Ausweichpfad ist unbekannt.")
         source = source[:start] + _SAFE_DRAIN + source[end:]
+    for before, after in _LEGACY_MESSAGES.items():
+        source = source.replace(before, after)
     # Validate both files before writing either; repeated startup is safe.
     route.write_text(route_source, encoding="utf-8")
     fallback.write_text(source, encoding="utf-8")

@@ -39,12 +39,12 @@ class ActionLedger:
     @staticmethod
     def _receipt(record: _Approval) -> dict:
         if record.state == "running":
-            return {"status": "AKTION_LAEUFT", "hinweis": "Diese bestätigte Aktion läuft bereits. Nicht erneut ausführen."}
+            return {"status": "AKTION_LAEUFT", "hinweis": "This approved action is already running. Do not run it again."}
         result = copy.deepcopy(record.result or {})
         result["already_executed" if record.state == "completed" else "receipt_replayed"] = True
-        result["hinweis"] = ("Gespeichertes Ergebnis dieser Bestätigung. Keine erneute Ausführung."
+        result["hinweis"] = ("Saved result for this approval. The action was not run again."
                              if record.state == "completed" else
-                             "Ergebnis dieser Aktion ist ungeklärt. Nicht automatisch wiederholen; zuerst im Zielsystem prüfen.")
+                             "The outcome of this action is unknown. Do not retry automatically; check the target system first.")
         return result
 
     def propose(self, fingerprint: str, secret: bytes, *, confirmation_message: bool) -> tuple[str | None, dict | None]:
@@ -58,7 +58,7 @@ class ActionLedger:
                     return previous_code, None
             # Keep consumed codes until the session ends. Never evict receipts to make room.
             if len(self._records) >= _MAX_APPROVALS:
-                raise ValueError("Zu viele Aktionsvorschläge in dieser Sitzung. Keine weitere Änderung ausgeführt.")
+                raise ValueError("Too many proposed actions in this session. No further change was made.")
             while True:
                 nonce = secrets.token_bytes(16)
                 code = hmac.new(secret, fingerprint.encode() + nonce, hashlib.sha256).hexdigest()[:6].upper()

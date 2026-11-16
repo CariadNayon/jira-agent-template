@@ -1,8 +1,8 @@
 <!doctype html>
-<html lang="de">
+<html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Einstellungen – Jira Agent</title>
+<title>Settings – Jira Agent</title>
 <style>
   body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;margin:0;color:#222;font-size:14px}
   header{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid #eee}
@@ -32,73 +32,73 @@
 </style>
 </head>
 <body>
-<header><h1>Einstellungen</h1><span id="who" class="hint"></span></header>
+<header><h1>Settings</h1><span id="who" class="hint"></span></header>
 <nav class="tabs">
-  <button data-tab="access" class="active">Zugänge</button>
-  <button data-tab="model">Modell</button>
-  <button data-tab="data">Datenquellen</button>
-  <button data-tab="rules">Regeln</button>
+  <button data-tab="access" class="active">Connections</button>
+  <button data-tab="model">Model</button>
+  <button data-tab="data">Data sources</button>
+  <button data-tab="rules">Rules</button>
   <button data-tab="skills">Skills</button>
 </nav>
 
 <section id="access" class="active">
-  <label for="agentName">Name des Agenten</label>
+  <label for="agentName">Agent name</label>
   <input id="agentName" type="text" maxlength="40" autocomplete="off">
-  <div class="hint">Leer lassen für den Standardnamen aus Ihrem Jira-Konto. Wird mit „Speichern“ übernommen.</div>
-  <p class="hint" style="margin-top:16px">Keys gelten nur für diese Sitzung, liegen nur im Arbeitsspeicher der App und werden nie gespeichert.</p>
+  <div class="hint">Leave blank to use the default name from your Jira account. Click Save to apply.</div>
+  <p class="hint" style="margin-top:16px">Keys are valid for this session only, are kept in app memory and are never saved to disk.</p>
   <div id="jiraStatus"></div>
   <label for="jiraToken">Jira Personal Access Token</label>
   <input id="jiraToken" type="password" autocomplete="off">
-  <div class="row"><button class="btn primary" id="connectJira">Mit Jira verbinden</button><span id="jiraMsg"></span></div>
-  <label for="azureKey">Eigener Azure-OpenAI-Key (optional)</label>
+  <div class="row"><button class="btn primary" id="connectJira">Connect to Jira</button><span id="jiraMsg"></span></div>
+  <label for="azureKey">Your Azure OpenAI key (optional)</label>
   <input id="azureKey" type="password" autocomplete="off">
-  <div class="row"><button class="btn" id="setAzure">Azure-Key übernehmen</button><span id="azureMsg"></span></div>
-  <div class="row" style="margin-top:24px"><button class="btn" id="logout">Abmelden (alle Keys löschen)</button></div>
+  <div class="row"><button class="btn" id="setAzure">Use Azure key</button><span id="azureMsg"></span></div>
+  <div class="row" style="margin-top:24px"><button class="btn" id="logout">Sign out (clear all keys)</button></div>
 </section>
 
 <section id="model">
-  <label>Modell</label>
+  <label>Model</label>
   <div id="providers"></div>
   <label for="deployment">Deployment</label><input id="deployment" type="text">
-  <label for="apiVersion">API-Version</label><input id="apiVersion" type="text">
-  <div id="endpointBox"><label for="endpoint">Eigener Azure-Endpoint</label><input id="endpoint" type="text">
-    <div class="hint">Nur https://&lt;name&gt;.openai.azure.com oder .cognitiveservices.azure.com. Key unter Zugänge eintragen.</div></div>
+  <label for="apiVersion">API version</label><input id="apiVersion" type="text">
+  <div id="endpointBox"><label for="endpoint">Your Azure endpoint</label><input id="endpoint" type="text">
+    <div class="hint">Only https://&lt;name&gt;.openai.azure.com or .cognitiveservices.azure.com. Enter your key under Connections.</div></div>
 </section>
 
 <section id="data">
-  <p class="hint">Es erscheint nur, was Sie selbst sehen dürfen. Der Agent liest nur, mit Ihren Rechten.</p>
-  <label for="catalog">Katalog</label><select id="catalog"><option value="">Katalog wählen …</option></select>
-  <label for="schema">Schema</label><select id="schema" disabled><option value="">Schema wählen …</option></select>
-  <label for="tables">Tabellen (Mehrfachauswahl mit Strg/Cmd)</label><select id="tables" multiple size="6" disabled></select>
-  <div class="row"><button class="btn" id="addTables">Hinzufügen</button><span id="ucMsg"></span></div>
-  <label>Freigegebene Tabellen</label><ul class="tables" id="selected"></ul>
+  <p class="hint">Only resources you have access to are shown. The agent uses your permissions for read-only access.</p>
+  <label for="catalog">Catalog</label><select id="catalog"><option value="">Select a catalog …</option></select>
+  <label for="schema">Schema</label><select id="schema" disabled><option value="">Select a schema …</option></select>
+  <label for="tables">Tables (hold Ctrl/Cmd to select multiple)</label><select id="tables" multiple size="6" disabled></select>
+  <div class="row"><button class="btn" id="addTables">Add</button><span id="ucMsg"></span></div>
+  <label>Enabled tables</label><ul class="tables" id="selected"></ul>
 </section>
 
 <section id="rules">
-  <label for="rulesText">Ihre Regeln in einfacher Sprache</label>
+  <label for="rulesText">Your rules in plain language</label>
   <textarea id="rulesText"></textarea>
-  <div class="row"><button class="btn" id="resetRules">Standardregeln wiederherstellen</button></div>
+  <div class="row"><button class="btn" id="resetRules">Restore default rules</button></div>
 </section>
 
 <section id="skills">
-  <p class="hint">Ein Skill ist eine gespeicherte Anleitung. Im Chat <b>/name</b> tippen, um ihn zu starten (z. B. <code>/wochenreport</code>).
-    Team-Skills gelten für alle; Ihre eigenen Skills sieht nur Sie. Skills werden hier direkt gespeichert (eigener Speichern-Knopf).</p>
+  <p class="hint">A skill is a saved set of instructions. Type <b>/name</b> in chat to run it (e.g. <code>/weekly-report</code>).
+    Team skills are available to everyone; your personal skills are visible only to you. Use the separate Save skill button to save them here.</p>
   <div id="skillList"></div>
-  <div class="row"><button class="btn" id="newSkill">+ Neuer Skill</button><span id="skillMsg"></span></div>
+  <div class="row"><button class="btn" id="newSkill">+ New skill</button><span id="skillMsg"></span></div>
   <div id="skillForm" style="display:none">
-    <label for="skillName">Name (wird zu /name)</label>
-    <input id="skillName" type="text" maxlength="40" placeholder="z. B. wochenreport" autocomplete="off">
-    <div class="hint">Kleinbuchstaben, Ziffern, Bindestriche.</div>
-    <label for="skillDesc">Kurzbeschreibung</label>
-    <input id="skillDesc" type="text" maxlength="200" placeholder="z. B. Erstellt einen Wochenbericht meiner Tickets">
-    <label for="skillText">Anleitung für den Agenten</label>
-    <textarea id="skillText" placeholder="1. Suche alle Tickets, die mir zugewiesen sind und diese Woche geändert wurden.&#10;2. Gruppiere sie nach Status.&#10;3. Erstelle eine kurze Zusammenfassung und biete einen Excel-Export an."></textarea>
-    <div class="row"><button class="btn primary" id="saveSkill">Skill speichern</button><button class="btn" id="cancelSkill">Abbrechen</button></div>
+    <label for="skillName">Name (becomes /name)</label>
+    <input id="skillName" type="text" maxlength="40" placeholder="e.g. weekly-report" autocomplete="off">
+    <div class="hint">Lowercase letters, digits and hyphens.</div>
+    <label for="skillDesc">Short description</label>
+    <input id="skillDesc" type="text" maxlength="200" placeholder="e.g. Creates a weekly report of my issues">
+    <label for="skillText">Instructions for the agent</label>
+    <textarea id="skillText" placeholder="1. Find all issues assigned to me that changed this week.&#10;2. Group them by status.&#10;3. Write a short summary and offer an Excel export."></textarea>
+    <div class="row"><button class="btn primary" id="saveSkill">Save skill</button><button class="btn" id="cancelSkill">Cancel</button></div>
   </div>
 </section>
 
 <footer><span id="saveMsg"></span>
-  <div class="row" style="margin:0"><button class="btn" id="close">Schließen</button><button class="btn primary" id="save">Speichern</button></div>
+  <div class="row" style="margin:0"><button class="btn" id="close">Close</button><button class="btn primary" id="save">Save</button></div>
 </footer>
 
 <script>
@@ -135,26 +135,26 @@
     try {
       var list = await api("/jira/api/skills");
       var box = $("skillList"); box.innerHTML = "";
-      if (!list.length) { var p = document.createElement("p"); p.className = "hint"; p.textContent = "Noch keine Skills."; box.appendChild(p); }
+      if (!list.length) { var p = document.createElement("p"); p.className = "hint"; p.textContent = "No skills yet."; box.appendChild(p); }
       list.forEach(function (s) {
         var d = document.createElement("div"); d.className = "skill";
         var top = document.createElement("div"); top.className = "top";
         var t = document.createElement("div");
         var n = document.createElement("b"); n.textContent = "/" + s.name; t.appendChild(n);
         var badge = document.createElement("span"); badge.className = "badge" + (s.quelle === "team" ? "" : " own");
-        badge.textContent = s.quelle === "team" ? "Team" : "Eigener"; t.appendChild(badge);
+        badge.textContent = s.quelle === "team" ? "Team" : "Personal"; t.appendChild(badge);
         var acts = document.createElement("div"); acts.className = "acts";
         if (s.quelle === "team") {
-          acts.appendChild(skillButton("Ansehen", function () { editSkill(s.name, true); }));
+          acts.appendChild(skillButton("View", function () { editSkill(s.name, true); }));
         } else {
-          acts.appendChild(skillButton("Bearbeiten", function () { editSkill(s.name, false); }));
-          acts.appendChild(skillButton("Für Team vorschlagen", function () {
+          acts.appendChild(skillButton("Edit", function () { editSkill(s.name, false); }));
+          acts.appendChild(skillButton("Suggest for the team", function () {
             location.href = "/jira/api/skills/" + encodeURIComponent(s.name) + "/download";
-            msg("skillMsg", "Datei heruntergeladen – Anleitung unter „Anleitung → Skill fürs Team“.", true);
+            msg("skillMsg", "File downloaded. See Guide → Share a skill with your team for the next steps.", true);
           }));
-          acts.appendChild(skillButton("Löschen", async function () {
-            if (!confirm("Skill /" + s.name + " löschen?")) return;
-            try { await api("/jira/api/skills/" + encodeURIComponent(s.name), { method: "DELETE" }); msg("skillMsg", "Gelöscht.", true); loadSkills(); notifyPage(); }
+          acts.appendChild(skillButton("Delete", async function () {
+            if (!confirm("Skill /" + s.name + "? Delete this skill?")) return;
+            try { await api("/jira/api/skills/" + encodeURIComponent(s.name), { method: "DELETE" }); msg("skillMsg", "Deleted.", true); loadSkills(); notifyPage(); }
             catch (e) { msg("skillMsg", e.message, false); }
           }));
         }
@@ -162,7 +162,7 @@
         var desc = document.createElement("div"); desc.className = "hint"; desc.textContent = s.beschreibung; d.appendChild(desc);
         box.appendChild(d);
       });
-    } catch (e) { msg("skillMsg", "Skills nicht ladbar: " + e.message, false); }
+    } catch (e) { msg("skillMsg", "Unable to load skills: " + e.message, false); }
   }
   function showSkillForm(skill, readOnly) {
     editing = skill ? skill.name : null;
@@ -181,11 +181,11 @@
   $("cancelSkill").addEventListener("click", function () { $("skillForm").style.display = "none"; });
   $("saveSkill").addEventListener("click", async function () {
     var name = (editing || $("skillName").value).trim().toLowerCase();
-    if (!name) return msg("skillMsg", "Bitte einen Namen eintragen.", false);
+    if (!name) return msg("skillMsg", "Please enter a name.", false);
     try {
       await api("/jira/api/skills/" + encodeURIComponent(name), { method: "PUT",
         body: JSON.stringify({ beschreibung: $("skillDesc").value, anleitung: $("skillText").value }) });
-      $("skillForm").style.display = "none"; msg("skillMsg", "Gespeichert. Im Chat /" + name + " tippen.", true);
+      $("skillForm").style.display = "none"; msg("skillMsg", "Saved. Type /" + name + " in chat.", true);
       loadSkills(); notifyPage();
     } catch (e) { msg("skillMsg", e.message, false); }
   });
@@ -195,9 +195,9 @@
     $("jiraStatus").innerHTML = "";
     var p = document.createElement("p");
     p.className = me.jira_user ? "ok" : "hint";
-    p.textContent = me.jira_user ? ("Jira: angemeldet als " + me.jira_user) : "Jira: nicht verbunden";
+    p.textContent = me.jira_user ? ("Jira: signed in as " + me.jira_user) : "Jira: not connected";
     $("jiraStatus").appendChild(p);
-    msg("azureMsg", me.has_azure_key ? "Eigener Azure-Key gesetzt" : "", true);
+    msg("azureMsg", me.has_azure_key ? "Your Azure key is set" : "", true);
   }
 
   function renderProviders() {
@@ -219,10 +219,10 @@
 
   function renderSelected() {
     var ul = $("selected"); ul.innerHTML = "";
-    if (!state.selected.length) { var e = document.createElement("li"); e.textContent = "(keine)"; ul.appendChild(e); }
+    if (!state.selected.length) { var e = document.createElement("li"); e.textContent = "(none)"; ul.appendChild(e); }
     state.selected.forEach(function (t) {
       var li = document.createElement("li"); var s = document.createElement("span"); s.textContent = t;
-      var b = document.createElement("button"); b.className = "btn"; b.textContent = "Entfernen";
+      var b = document.createElement("button"); b.className = "btn"; b.textContent = "Remove";
       b.addEventListener("click", function () { state.selected = state.selected.filter(function (x) { return x !== t; }); renderSelected(); });
       li.appendChild(s); li.appendChild(b); ul.appendChild(li);
     });
@@ -235,10 +235,10 @@
       var cats = await api("/jira/api/uc/catalogs");
       cats.forEach(function (c) { option($("catalog"), c, c); });
       catalogsLoaded = true;
-    } catch (e) { msg("ucMsg", "Unity Catalog nicht lesbar: " + e.message, false); }
+    } catch (e) { msg("ucMsg", "Unable to read Unity Catalog: " + e.message, false); }
   }
   $("catalog").addEventListener("change", async function () {
-    var s = $("schema"); s.innerHTML = ""; option(s, "", "Schema wählen …"); s.disabled = true;
+    var s = $("schema"); s.innerHTML = ""; option(s, "", "Select a schema …"); s.disabled = true;
     $("tables").innerHTML = ""; $("tables").disabled = true;
     if (!this.value) return;
     try { (await api("/jira/api/uc/schemas?catalog=" + encodeURIComponent(this.value))).forEach(function (x) { option(s, x, x); }); s.disabled = false; }
@@ -259,26 +259,26 @@
       var full = c + "." + s + "." + o.value;
       if (state.selected.indexOf(full) < 0) state.selected.push(full);
     });
-    state.selected.sort(); renderSelected(); msg("ucMsg", "Hinzugefügt – zum Übernehmen Speichern klicken.", true);
+    state.selected.sort(); renderSelected(); msg("ucMsg", "Added. Click Save to apply.", true);
   });
 
   $("connectJira").addEventListener("click", async function () {
     var token = $("jiraToken").value.trim();
-    if (!token) return msg("jiraMsg", "Bitte Token eintragen.", false);
-    msg("jiraMsg", "Prüfe …");
+    if (!token) return msg("jiraMsg", "Please enter a token.", false);
+    msg("jiraMsg", "Checking …");
     try { var r = await api("/jira/api/credentials", { method: "POST", body: JSON.stringify({ jira_token: token }) });
-      $("jiraToken").value = ""; msg("jiraMsg", "Angemeldet als " + r.jira_user, true); await load(); notifyPage(); }
+      $("jiraToken").value = ""; msg("jiraMsg", "Signed in as " + r.jira_user, true); await load(); notifyPage(); }
     catch (e) { msg("jiraMsg", e.message, false); }
   });
   $("setAzure").addEventListener("click", async function () {
     var key = $("azureKey").value.trim();
-    if (!key) return msg("azureMsg", "Bitte Key eintragen.", false);
+    if (!key) return msg("azureMsg", "Please enter a key.", false);
     try { await api("/jira/api/credentials", { method: "POST", body: JSON.stringify({ azure_key: key }) });
-      $("azureKey").value = ""; msg("azureMsg", "Eigener Azure-Key für diese Sitzung gesetzt.", true); }
+      $("azureKey").value = ""; msg("azureMsg", "Your Azure key is set for this session.", true); }
     catch (e) { msg("azureMsg", e.message, false); }
   });
   $("logout").addEventListener("click", async function () {
-    try { await api("/jira/api/credentials", { method: "DELETE" }); msg("jiraMsg", "Abgemeldet, alle Keys gelöscht.", true); await load(); notifyPage(); }
+    try { await api("/jira/api/credentials", { method: "DELETE" }); msg("jiraMsg", "Signed out. All keys cleared.", true); await load(); notifyPage(); }
     catch (e) { msg("jiraMsg", e.message, false); }
   });
   $("resetRules").addEventListener("click", function () { $("rulesText").value = state.defaults.rules; });
@@ -290,11 +290,11 @@
       azure_deployment: $("deployment").value.trim(), azure_api_version: $("apiVersion").value.trim(),
       azure_endpoint: $("endpoint").value.trim()
     };
-    msg("saveMsg", "Speichere …");
+    msg("saveMsg", "Saving …");
     try { var r = await api("/jira/api/settings", { method: "POST", body: JSON.stringify(body) });
       state.settings = r.settings;
       notifyPage();
-      msg("saveMsg", r.saved ? "Gespeichert. Gilt ab der nächsten Nachricht." : (r.warning || "Übernommen (nur für diese Sitzung)."), true); }
+      msg("saveMsg", r.saved ? "Saved. Applies from the next message." : (r.warning || "Applied for this session only."), true); }
     catch (e) { msg("saveMsg", e.message, false); }
   });
   $("close").addEventListener("click", function () { parent.postMessage("jira-settings-close", location.origin); });
@@ -311,7 +311,7 @@
       $("rulesText").value = me.settings.rules || "";
       $("agentName").value = me.settings.agent_name || "";
       $("agentName").placeholder = me.agent_name_default;
-    } catch (e) { msg("saveMsg", "Einstellungen nicht ladbar: " + e.message, false); }
+    } catch (e) { msg("saveMsg", "Unable to load settings: " + e.message, false); }
   }
   load();
 })();

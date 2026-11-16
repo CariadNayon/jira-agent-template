@@ -62,24 +62,23 @@ def read_pdf(data: bytes, start_page: int = 1, max_pages: int = 10, text_offset:
 
 @tool(needs=["uploads"])
 def list_uploaded_files(ctx: ToolContext) -> dict:
-    """Listet die Dateien, die der Nutzer in diesem Chat hochgeladen hat (Name, ID, Größe)."""
+    """Lists files uploaded by the user in this chat (name, ID, size)."""
     return {"dateien": ctx.uploads.list()}
 
 
 @tool(needs=["uploads"])
 def read_uploaded_file(ctx: ToolContext, file_id: str, max_rows: int = 200, start_page: int = 1, max_pages: int = 10, text_offset: int = 0) -> dict:
-    """Liest Tabellen (CSV, Excel), Text und PDF-Text. Für PNG/JPEG/WebP werden nur Metadaten geliefert;
-    die referenzierten Bilder stehen dem Modell direkt in der Benutzernachricht zur Verfügung.
+    """Reads tables (CSV, Excel), text and PDF text. Returns metadata only for PNG/JPEG/WebP;
+    referenced images are provided directly to the model in the user message.
 
-    file_id: ID der Datei (siehe list_uploaded_files)
-    max_rows: maximale Vorschau-Zeilen je Tabelle (höchstens 1000); für Berechnungen analyze_uploaded_table nutzen
-    start_page: erste PDF-Seite, beginnend bei 1
-    max_pages: PDF-Seiten je Aufruf, maximal 20; mit next_page weiterblättern
-    text_offset: Textposition innerhalb der Startseite; next_text_offset aus vorherigem Ergebnis nutzen
-    """
+    file_id: file ID (see list_uploaded_files)
+    max_rows: maximum preview rows per table (at most 1000); use analyze_uploaded_table for calculations
+    start_page: first PDF page, starting at 1
+    max_pages: PDF pages per call, at most 20; continue with next_page
+    text_offset: text position within the starting page; use next_text_offset from the previous result"""
     f = ctx.uploads.get(file_id)
     if f is None:
-        raise ValueError("Datei nicht gefunden oder abgelaufen – bitte erneut hochladen.")
+        raise ValueError("File not found or expired. Please upload it again.")
     max_rows = max(1, min(int(max_rows), 1000))
     ext = PurePath(f.name).suffix.lower()
     out: dict = {"name": f.name}
@@ -95,5 +94,5 @@ def read_uploaded_file(ctx: ToolContext, file_id: str, max_rows: int = 200, star
         text = _decode(f.data)
         out.update({"text": text[:_MAX_TEXT], "gekuerzt": len(text) > _MAX_TEXT})
     else:
-        raise ValueError(f"Dateityp {ext or f.mime} kann ich nicht lesen. Möglich: CSV, Excel, PDF, Text.")
+        raise ValueError(f"File type {ext or f.mime} cannot be read. Supported: CSV, Excel, PDF, text.")
     return out

@@ -32,9 +32,9 @@ def _check_functions(stmt: exp.Expression) -> None:
         if isinstance(f, exp.Anonymous):
             name = f.name.lower()
             if name not in _ALLOWED_UNKNOWN_FUNCS or isinstance(f.parent, exp.Dot):
-                raise ValueError(f"Funktion {name} ist nicht erlaubt (nur eingebaute SQL-Funktionen).")
+                raise ValueError(f"Function {name} is not allowed (built-in SQL functions only).")
         elif f.key.startswith(_FORBIDDEN_FUNC_PREFIXES):
-            raise ValueError(f"Funktion {f.sql_name().lower()} ist nicht erlaubt.")
+            raise ValueError(f"Function {f.sql_name().lower()} is not allowed.")
 
 
 def normalize_table(name: str) -> str:
@@ -46,24 +46,24 @@ def check_readonly_sql(sql: str, allowed_tables: list[str]) -> str:
     try:
         statements = [s for s in sqlglot.parse(sql, read="databricks") if s is not None]
     except sqlglot.errors.ParseError as e:
-        raise ValueError(f"SQL nicht lesbar: {str(e)[:200]}") from e
+        raise ValueError(f"Unable to parse SQL: {str(e)[:200]}") from e
     if len(statements) != 1:
-        raise ValueError("Genau eine Abfrage erlaubt.")
+        raise ValueError("Exactly one query is allowed.")
     stmt = statements[0]
     if not isinstance(stmt, exp.Query) or (_FORBIDDEN and stmt.find(*_FORBIDDEN)):
-        raise ValueError("Nur lesende SELECT-Abfragen sind erlaubt.")
+        raise ValueError("Only read-only SELECT queries are allowed.")
     _check_functions(stmt)
     cte_names = {c.alias_or_name.lower() for c in stmt.find_all(exp.CTE)}
     for t in stmt.find_all(exp.Table):
         if not t.name:
-            raise ValueError("Tabellenfunktionen sind nicht erlaubt.")
+            raise ValueError("Table functions are not allowed.")
         if not t.db and t.name.lower() in cte_names:
             continue
         if not (t.catalog and t.db):
-            raise ValueError(f"Tabelle {t.name} bitte voll qualifiziert angeben (catalog.schema.table).")
+            raise ValueError(f"Table {t.name} must be fully qualified (catalog.schema.table).")
         full = f"{t.catalog}.{t.db}.{t.name}".lower()
         if full not in allowed:
-            raise ValueError(f"Tabelle {full} ist nicht freigegeben.")
+            raise ValueError(f"Table {full} is not enabled.")
     return sql
 
 
@@ -92,7 +92,7 @@ class SqlRunner:
                     api.cancel_execution(resp.statement_id)  # sonst läuft die Abfrage im Warehouse weiter
                 except Exception:
                     pass
-                return {"error": "TIMEOUT", "details": f"Abfrage nach {timeout_s} s abgebrochen."}
+                return {"error": "TIMEOUT", "details": f"Query cancelled after {timeout_s} s."}
             time.sleep(2)
             resp = api.get_statement(resp.statement_id)
         if resp.status.state != StatementState.SUCCEEDED:

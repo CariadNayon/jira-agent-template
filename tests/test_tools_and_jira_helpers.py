@@ -50,7 +50,7 @@ def test_helpers_change_fake_jira():
 
 def test_helper_errors_are_readable():
     jira = FakeJira(issues={"ABC-1": {}})
-    with pytest.raises(JiraError, match="nicht möglich.*Start"):
+    with pytest.raises(JiraError, match="unavailable.*Start"):
         jira.transition("ABC-1", "Gibt es nicht")
     with pytest.raises(JiraError, match="HTTP 404"):
         jira.comment("ABC-9", "x")

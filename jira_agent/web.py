@@ -38,13 +38,13 @@ router = APIRouter(prefix="/jira")
 def _who(request: Request) -> tuple[str, str | None]:
     email, token = identity(request.headers)
     if not email:
-        raise HTTPException(401, "Nicht angemeldet.")
+        raise HTTPException(401, "Not signed in.")
     return email, token
 
 
 def _client(token: str | None):
     if not token:
-        raise HTTPException(403, "Kein Nutzer-Token – User Authorization der App prüfen.")
+        raise HTTPException(403, "No user token. Check the User Authorization settings for the app.")
     return user_client(token)
 
 
@@ -91,7 +91,7 @@ async def set_credentials(body: Credentials, request: Request):
         result["jira_user"] = state.jira_user
     if body.azure_key:
         state.creds["azure_key"] = body.azure_key
-        result["azure_key"] = "gesetzt"
+        result["azure_key"] = "set"
     return result
 
 
@@ -99,7 +99,7 @@ async def set_credentials(body: Credentials, request: Request):
 async def delete_credentials(request: Request):
     email, _ = _who(request)
     logout(email)
-    return {"status": "abgemeldet"}
+    return {"status": "signed_out"}
 
 
 # ---------------------------------------------------------------- Einstellungen (Home-Ordner, ohne Keys)
@@ -117,7 +117,7 @@ class Settings(BaseModel):
 async def save_settings(body: Settings, request: Request):
     email, token = _who(request)
     if body.llm_provider not in PROVIDERS:
-        raise HTTPException(400, "Unbekanntes Modell.")
+        raise HTTPException(400, "Unknown model.")
     data = body.model_dump()
     if PROVIDERS[body.llm_provider].needs_own_key:
         try:
@@ -134,7 +134,7 @@ async def save_settings(body: Settings, request: Request):
             saved = True
         except Exception as e:
             user_state(email).settings = settings
-            return {"settings": settings, "saved": False, "warning": f"Nur für diese Sitzung: {type(e).__name__}"}
+            return {"settings": settings, "saved": False, "warning": f"For this session only: {type(e).__name__}"}
     user_state(email).settings = settings
     return {"settings": settings, "saved": saved}
 
@@ -165,7 +165,7 @@ async def download(fid: str, request: Request):
     email, _ = _who(request)
     f = get_file(email, fid)
     if f is None:
-        raise HTTPException(404, "Datei nicht gefunden oder abgelaufen.")
+        raise HTTPException(404, "File not found or expired.")
     disposition = "inline" if f.mime.startswith("image/") else "attachment"
     return Response(f.data, media_type=f.mime, headers={
         "Content-Disposition": f'{disposition}; filename="{f.name}"', "Cache-Control": "private, no-store"})
@@ -177,16 +177,16 @@ async def upload(name: str, request: Request, chat_id: str | None = None):
     """Rohdaten im Body, Dateiname als Query-Parameter (ohne multipart, keine Zusatzpakete nötig)."""
     email, _ = _who(request)
     if int(request.headers.get("content-length") or 0) > _MAX_UPLOAD:
-        raise HTTPException(413, "Datei ist zu groß (max. 20 MB).")
+        raise HTTPException(413, "File too large (max. 20 MB).")
     data = await request.body()
     if not data:
-        raise HTTPException(400, "Leere Datei.")
+        raise HTTPException(400, "Empty file.")
     if len(data) > _MAX_UPLOAD:
-        raise HTTPException(413, "Datei ist zu groß (max. 20 MB).")
+        raise HTTPException(413, "File too large (max. 20 MB).")
     clean = _UPLOAD_NAME_RE.sub("_", Path(name).name).strip()[:100] or "datei"
     mime = (request.headers.get("content-type") or "application/octet-stream").split(";")[0]
     if chat_id is not None and not re.fullmatch(r"[A-Za-z0-9_-]{1,128}", chat_id):
-        raise HTTPException(400, "Ungültige Gesprächskennung.")
+        raise HTTPException(400, "Invalid conversation ID.")
     try:
         mime = await asyncio.to_thread(validate_upload, clean, mime, data,
                                        images_enabled=CFG["llm"].get("supports_images", False))
@@ -194,14 +194,14 @@ async def upload(name: str, request: Request, chat_id: str | None = None):
         raise HTTPException(415, str(e)) from None
     fid = UploadSink(email, conversation_id=chat_id).put(clean, mime, data)
     return {"id": fid, "name": clean, "bytes": len(data), "mime": mime,
-            "reference": f"[Datei: {clean}](/jira/uploads/{fid})"}
+            "reference": f"[File: {clean}](/jira/uploads/{fid})"}
 
 
 @router.get("/uploads/{fid}")
 async def uploaded_file(fid: str, request: Request):
     f = UploadSink(_who(request)[0]).get(fid)
     if f is None:
-        raise HTTPException(404, "Datei nicht gefunden oder abgelaufen.")
+        raise HTTPException(404, "File not found or expired.")
     return Response(f.data, media_type=f.mime, headers={
         "Content-Disposition": f"attachment; filename*=UTF-8''{quote(f.name)}",
         "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff"})
@@ -215,7 +215,7 @@ async def list_uploads(request: Request):
 @router.delete("/api/uploads/{fid}")
 async def delete_upload(fid: str, request: Request):
     UploadSink(_who(request)[0]).delete(fid)
-    return {"status": "gelöscht"}
+    return {"status": "deleted"}
 
 
 # ---------------------------------------------------------------- Skills (Team: Repo, persönlich: Home-Ordner)
@@ -241,7 +241,7 @@ async def get_skill(name: str, request: Request):
     email, token = _who(request)
     skill = (await asyncio.to_thread(all_skills, user_state(email), email, token)).get(name)
     if not skill:
-        raise HTTPException(404, "Skill nicht gefunden.")
+        raise HTTPException(404, "Skill not found.")
     return skill
 
 
@@ -250,7 +250,7 @@ async def download_skill(name: str, request: Request):
     email, token = _who(request)
     skill = (await asyncio.to_thread(all_skills, user_state(email), email, token)).get(name)
     if not skill:
-        raise HTTPException(404, "Skill nicht gefunden.")
+        raise HTTPException(404, "Skill not found.")
     return Response(render_skill(skill), media_type="text/markdown; charset=utf-8",
                     headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(skill['name'])}.md"})
 
@@ -263,11 +263,11 @@ async def save_skill(name: str, body: SkillBody, request: Request):
     except ValueError as e:
         raise HTTPException(400, str(e)) from None
     if skill["name"] in team_skills():
-        raise HTTPException(400, f"/{skill['name']} ist ein Team-Skill – bitte einen anderen Namen wählen.")
+        raise HTTPException(400, f"/{skill['name']} is a team skill. Please choose another name.")
     state = user_state(email)
     personal = dict(await asyncio.to_thread(load_personal_skills, state, email, token))
     if skill["name"] not in personal and len(personal) >= MAX_PERSONAL:
-        raise HTTPException(400, f"Höchstens {MAX_PERSONAL} persönliche Skills.")
+        raise HTTPException(400, f"Maximum: {MAX_PERSONAL} personal skills.")
     personal[skill["name"]] = {**skill, "quelle": "persoenlich"}
     await asyncio.to_thread(PersonalSkillStore(_client(token), email).save, personal)
     state.skills = personal
@@ -280,11 +280,11 @@ async def delete_skill(name: str, request: Request):
     state = user_state(email)
     personal = dict(await asyncio.to_thread(load_personal_skills, state, email, token))
     if name not in personal:
-        raise HTTPException(404, "Persönlicher Skill nicht gefunden (Team-Skills lassen sich nur im Repo ändern).")
+        raise HTTPException(404, "Personal skill not found (team skills can only be edited in the repository).")
     personal.pop(name)
     await asyncio.to_thread(PersonalSkillStore(_client(token), email).save, personal)
     state.skills = personal
-    return {"status": "gelöscht"}
+    return {"status": "deleted"}
 
 
 # ---------------------------------------------------------------- Oberfläche
@@ -308,7 +308,7 @@ async def ui_js():
 async def guide_image(name: str):
     path = _STATIC / "img" / name
     if not _IMG_RE.fullmatch(name) or not path.is_file():
-        raise HTTPException(404, "Bild nicht gefunden.")
+        raise HTTPException(404, "Image not found.")
     return Response(path.read_bytes(), media_type="image/png", headers={"Cache-Control": "public, max-age=3600"})
 
 

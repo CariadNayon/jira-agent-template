@@ -33,7 +33,7 @@ def test_skill_format_roundtrip_and_validation():
     for bad in ("a", "mit leerzeichen", "ümlaut", "x" * 41, "-start"):
         with pytest.raises(ValueError):
             check_skill(bad, "b", "a")
-    with pytest.raises(ValueError, match="Kopfteil"):
+    with pytest.raises(ValueError, match="Missing header"):
         parse_skill("nur Text")
 
 
@@ -46,7 +46,7 @@ def test_invocation_activates_skill_in_prompt():
     prompt = skills_prompt(skills, "/wochenreport KW 46")
     assert "- /wochenreport: Bericht" in prompt and "SCHRITTE-XYZ" in prompt and "KW 46" in prompt
     assert "SCHRITTE-XYZ" not in skills_prompt(skills, "Hallo")
-    assert "gibt es nicht" in skills_prompt(skills, "/unbekannt")
+    assert "does not exist" in skills_prompt(skills, "/unbekannt")
 
 
 def test_read_uploaded_files():

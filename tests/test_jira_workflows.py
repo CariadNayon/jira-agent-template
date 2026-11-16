@@ -154,9 +154,9 @@ def test_tool_selection_for_reusable_read_only_agent():
     assert {t.name for t in available_tools(ToolContext(jira=FakeJira(), enabled_tools=names))} == set(names)
     assert available_tools(ToolContext(jira=FakeJira(), enabled_tools=[])) == []
     assert available_tools(ToolContext(enabled_tools=names)) == []
-    with pytest.raises(ValueError, match='Unbekannte Tools'):
+    with pytest.raises(ValueError, match='Unknown tools'):
         available_tools(ToolContext(enabled_tools=['missing_tool']))
-    with pytest.raises(ValueError, match='Liste'):
+    with pytest.raises(ValueError, match='list'):
         available_tools(ToolContext(enabled_tools='jira_search'))
 
 
@@ -207,7 +207,7 @@ def test_ambiguous_transition_requires_specific_id():
         {'id':'11','name':'Schließen','to':'Erledigt'},
         {'id':'21','name':'Verwerfen','to':'Erledigt'}])
     result = run_tool('jira_set_status', jira=jira, issue_key='ABC-1', status='Erledigt')
-    assert result['error'] == 'JiraError' and 'Mehrere' in result['details']
+    assert result['error'] == 'JiraError' and 'Multiple' in result['details']
     assert not any(method == 'POST' for method,_,_ in jira.calls)
     assert run_tool('jira_set_status', jira=jira, issue_key='ABC-1', status='11')['status'] == 'OK'
 
@@ -226,5 +226,5 @@ def test_runtime_builds_agent_with_selected_tools_and_user_context(monkeypatch):
     agent, context = runtime.prepare({'x-forwarded-email':'runtime@example.test'}, [])
     assert {t.name for t in agent.tools} == {'jira_create_issue','jira_get_myself'}
     assert context.tool_ctx.jira is jira
-    assert 'verbunden als jira.user' in agent.instructions
-    assert 'Tatsächlich verfügbare Tools: jira_create_issue, jira_get_myself' in agent.instructions
+    assert 'connected as jira.user' in agent.instructions
+    assert 'Actually available tools: jira_create_issue, jira_get_myself' in agent.instructions

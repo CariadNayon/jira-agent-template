@@ -27,6 +27,7 @@ from jira_agent.settings_store import settings_path
 
 TEAM_DIR = Path(__file__).resolve().parent.parent / "skills"
 NAME_RE = re.compile(r"[a-z0-9][a-z0-9-]{1,39}")
+LEGACY_TEAM_NAMES = {'datei-auswertung': 'file-analysis', 'ticket-entwurf': 'issue-draft', 'ticket-zusammenfassung': 'issue-summary', 'wochenreport': 'weekly-report'}
 INVOKE_RE = re.compile(r"^\s*/([a-z0-9][a-z0-9-]{1,39})(?=\s|$)\s*(.*)", re.S)
 MAX_DESCRIPTION = 200
 MAX_INSTRUCTIONS = 8000
@@ -36,13 +37,13 @@ MAX_PERSONAL = 50
 def check_skill(name: str, beschreibung: str, anleitung: str) -> dict:
     name = (name or "").strip().lower()
     if not NAME_RE.fullmatch(name):
-        raise ValueError("Name: 2–40 Zeichen, nur Kleinbuchstaben, Ziffern und Bindestriche (z. B. wochenreport).")
+        raise ValueError("Name: 2–40 characters, lowercase letters, digits and hyphens only (e.g. weekly-report).")
     beschreibung = " ".join((beschreibung or "").split())
     if not beschreibung or len(beschreibung) > MAX_DESCRIPTION:
-        raise ValueError(f"Beschreibung: 1–{MAX_DESCRIPTION} Zeichen.")
+        raise ValueError(f"Description: 1–{MAX_DESCRIPTION} characters.")
     anleitung = (anleitung or "").strip()
     if not anleitung or len(anleitung) > MAX_INSTRUCTIONS:
-        raise ValueError(f"Anleitung: 1–{MAX_INSTRUCTIONS} Zeichen.")
+        raise ValueError(f"Instructions: 1–{MAX_INSTRUCTIONS} characters.")
     return {"name": name, "beschreibung": beschreibung, "anleitung": anleitung}
 
 
@@ -50,14 +51,14 @@ def parse_skill(text: str, fallback_name: str = "") -> dict:
     """Liest einen Skill im Markdown-Format (Kopfteil zwischen --- und ---, danach die Anleitung)."""
     m = re.match(r"\s*---\s*\n(.*?)\n---\s*\n?(.*)", text or "", re.S)
     if not m:
-        raise ValueError("Kopfteil fehlt: Datei muss mit --- name: … beschreibung: … --- beginnen.")
+        raise ValueError("Missing header: the file must start with --- name: … description: … ---.")
     head = yaml.safe_load(m.group(1)) or {}
     return check_skill(str(head.get("name") or fallback_name),
                        str(head.get("beschreibung") or head.get("description") or ""), m.group(2))
 
 
 def render_skill(skill: dict) -> str:
-    head = yaml.safe_dump({"name": skill["name"], "beschreibung": skill["beschreibung"]},
+    head = yaml.safe_dump({"name": skill["name"], "description": skill["beschreibung"]},
                           allow_unicode=True, sort_keys=False)
     return f"---\n{head}---\n{skill['anleitung']}\n"
 
@@ -83,18 +84,18 @@ def skills_prompt(skills: dict[str, dict], last_user_text: str) -> str:
     """Abschnitt für den System-Prompt: verfügbare Skills und ggf. die Anleitung des aufgerufenen Skills."""
     lines = []
     if skills:
-        lines.append("Skills (der Nutzer ruft sie mit /name auf; schlage passende vor):")
+        lines.append("Skills (the user invokes them with /name; suggest relevant ones):")
         lines += [f"- /{s['name']}: {s['beschreibung']}" for s in skills.values()]
     called = parse_invocation(last_user_text)
     if called:
         name, rest = called
-        skill = skills.get(name)
+        skill = skills.get(name) or skills.get(LEGACY_TEAM_NAMES.get(name, ""))
         if skill:
-            lines.append(f"\nDer Nutzer hat den Skill /{name} aufgerufen"
-                         f"{' mit: ' + rest if rest else ''}. Folge genau dieser Anleitung:\n{skill['anleitung']}")
+            lines.append(f"\nThe user invoked the skill /{name}"
+                         f"{' with: ' + rest if rest else ''}. Follow these instructions exactly:\n{skill['anleitung']}")
         else:
-            lines.append(f"\nDer Nutzer hat /{name} geschrieben, diesen Skill gibt es nicht. "
-                         "Sag das und nenne die verfügbaren Skills.")
+            lines.append(f"\nThe user entered /{name}, but this skill does not exist. "
+                         "Explain this and list the available skills.")
     return "\n".join(lines)
 
 
