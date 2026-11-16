@@ -97,7 +97,7 @@ async def run_case(case: str, model, *, timeout: float = 120) -> dict:
         with patch.object(runtime,'JiraClient',return_value=jira),patch.object(runtime,'build_model',return_value=model):
             if case=='jira_search':
                 result,_=await ask('Zeige meine offenen Jira-Tickets.')
-                assert 'jira_search' in tools,'Kein Jira-Suchtool verwendet.'
+                assert any(name in tools for name in ('jira_search', 'jira_search_tickets')),'Kein Jira-Suchtool verwendet.'
                 assert 'ABC-' in str(result.final_output),'Keine echten Fixture-Ticket-Keys in der Antwort.'
             elif case in ('deny_creation','approval_replay','permission_error'):
                 result,history=await ask('Erstelle im Projekt ABC ein Ticket vom Typ Task mit Titel Akzeptanztest und Beschreibung Test. Weise es mir zu.')

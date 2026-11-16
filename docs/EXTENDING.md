@@ -63,6 +63,12 @@ Für eine andere Integration einen eigenen Client und bei Bedarf eine zusätzlic
 
 ## Einen Ablauf als Skill speichern
 
+Für Standardaufgaben gibt es `/show-ticket`, `/search-tickets` und `/edit-ticket`. Sie verwenden die bestehenden Detail- und Schreib-Tools; es gibt keine zweiten Schreibpfade. Der System-Prompt beschreibt diese Grundabläufe auch für normale Chat-Anfragen. Bei einem Slash-Aufruf werden die ausführlichen Skill-Schritte geladen. Weitere domänenspezifische Abläufe gehören in eigene Skills.
+
+`jira_search_tickets` nimmt Projekt, Textphrase, Bearbeiter (`@me`, `@unassigned` oder Jira-Kennung), offen/erledigt und einen tatsächlichen Statusnamen als feste Filter entgegen. Alle Filter werden mit AND verbunden, Werte werden als JQL-Zeichenketten maskiert, die Textsuche zusätzlich als Lucene-Phrase. Offen bedeutet unaufgelöst einschließlich laufender Tickets. Es gibt keine implizite Einschränkung auf den angemeldeten Nutzer. Das Tool nutzt denselben Jira-Client und dieselben Nutzerrechte wie `jira_search`, das für komplexe JQL-Abfragen erhalten bleibt. Vorschau und Fortsetzung verwenden dieselben Limits und `next_start_at`.
+
+Die Chat-Frontend-Anpassung `scripts/frontend_details.py` setzt beide Tool-Renderer standardmäßig auf eingeklappt. Status, Fehlerkennzeichnung und manuelles Auf-/Zuklappen bleiben erhalten. Die Einstellung greift auch beim Start eines bereits heruntergeladenen Frontends; ungeplante Upstream-Änderungen werden vor dem Build gemeldet.
+
 Ein Skill kann vorhandene Tools kombinieren, aber keine neuen Berechtigungen oder technischen Fähigkeiten schaffen. Beispiel: `/issue-draft` im Ordner `skills/`. Er erfragt Projekt und Pflichtfelder, erstellt einen Entwurf und ruft das Schreib-Tool erst für die Vorschau auf. Team-Skills erscheinen nach dem Deployment bei allen Nutzern dieser App.
 
 Die Dateien unter `.claude/skills/` sind dagegen Arbeitsanleitungen für die KI, die den Code entwickelt. Für Copilot `AGENTS.md` und die passende Arbeitsanleitung explizit mitgeben.

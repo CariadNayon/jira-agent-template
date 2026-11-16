@@ -54,7 +54,8 @@ def test_new_and_saved_attachment_references_still_send_native_images(label):
 
 def test_english_team_commands_keep_legacy_aliases_without_overriding_personal_skills():
     skills = team_skills()
-    assert {'weekly-report', 'issue-draft', 'issue-summary', 'file-analysis', 'triage'} == set(skills)
+    assert {'weekly-report', 'issue-draft', 'issue-summary', 'file-analysis', 'triage',
+            'show-ticket', 'search-tickets', 'edit-ticket'} == set(skills)
     assert skills['weekly-report']['anleitung'] in skills_prompt(skills, '/wochenreport last week')
     personal = {'name': 'wochenreport', 'beschreibung': 'My custom skill', 'anleitung': 'PERSONAL-INSTRUCTIONS'}
     prompt = skills_prompt({**skills, 'wochenreport': personal}, '/wochenreport')

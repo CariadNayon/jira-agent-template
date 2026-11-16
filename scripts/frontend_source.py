@@ -9,7 +9,9 @@ def prepare_frontend(frontend: Path) -> None:
     from scripts.frontend_safety import ensure_frontend_safety
     from scripts.frontend_attachments import ensure_frontend_attachments
     from scripts.frontend_results import ensure_frontend_results
+    from scripts.frontend_details import ensure_frontend_details
     ensure_frontend_identity(frontend)
     ensure_frontend_safety(frontend)
     ensure_frontend_attachments(frontend)
     ensure_frontend_results(frontend)
+    ensure_frontend_details(frontend)

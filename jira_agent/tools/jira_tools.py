@@ -77,6 +77,7 @@ def export_issues(jira: JiraClient, jql: str, limit: int, start_at: int = 0, tim
 @tool(needs=["jira"])
 def jira_search(ctx: ToolContext, jql: str, max_results: int = 20, start_at: int = 0) -> dict:
     """Searches Jira issues using JQL, e.g. 'assignee = currentUser() ORDER BY updated DESC'.
+    Prefer jira_search_tickets for ordinary filters; use this tool for advanced user-supplied JQL.
 
     jql: JQL query
     max_results: maximum number of results (at most 50)
@@ -93,6 +94,7 @@ def jira_get_issue(ctx: ToolContext, issue_key: str) -> dict:
     out = summarize_issue(issue)
     out["labels"] = issue.get("fields", {}).get("labels")
     out["description"] = (issue.get("fields", {}).get("description") or "")[:3000]
+    out["url"] = ctx.jira.issue_url(issue_key)
     return out
 
 

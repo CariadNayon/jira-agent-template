@@ -27,12 +27,15 @@ Die Regeln für die KI stehen in [AGENTS.md](AGENTS.md), die Abläufe in [.claud
 Jira ist der Basis-Anwendungsfall. Die Laufzeit, Tool-Registrierung, Bestätigungen und Skills können für eigene Agenten wiederverwendet werden. [Erweiterungsleitfaden](docs/EXTENDING.md): Architektur, Tool-Auswahl über `agent.enabled_tools`, neue Integrationen und Tests.
 
 Beispiele im Chat:
+- `/show-ticket ABC-123`, `/search-tickets my open tickets in ABC` und `/edit-ticket ABC-123 change the summary to …` nutzen vorbereitete Abläufe für Anzeigen, Suchen und Bearbeiten. Normale Chat-Anfragen nutzen dieselben Grundregeln.
 - „Erstelle ein Testticket im Projekt ABC und weise es mir zu.“ Der Agent klärt Tickettyp und Pflichtfelder, zeigt eine Vorschau und wartet auf `yes CODE`.
 - „Welche Statuswechsel sind für ABC-123 möglich?“
 - „Ändere die Beschreibung von ABC-123 auf …“
 - „Verknüpfe ABC-123 so, dass es ABC-456 blockiert.“
 - `/file-analysis` führt durch Dokument- und Tabellenanalysen.
 - `/issue-draft` führt durch einen wiederverwendbaren Erstellungsablauf.
+
+Tool-Aufrufe sind standardmäßig eingeklappt; Name und Status bleiben sichtbar. Ein Klick öffnet Parameter und Ergebnis. Die gewöhnliche Ticket-Suche nutzt `jira_search_tickets` mit festen Filtern; `jira_search` bleibt für erweiterte JQL-Abfragen verfügbar.
 
 Jira-Zugangsdaten ausschließlich im Feld **Jira verbinden** oder unter Zahnrad → Zugänge einfügen, niemals als Chatnachricht. Die tatsächlichen Projektberechtigungen gelten weiterhin. Die Integration unterstützt Jira Data Center; Jira Cloud benötigt Anpassungen.
 
