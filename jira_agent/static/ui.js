@@ -47,6 +47,8 @@
       'background:#fff8e1;color:#4a3800;border:1px solid #f0c36d;box-shadow:0 2px 8px rgba(0,0,0,.12)}',
     '#jira-banner.ok{background:#e8f5e9;color:#1b5e20;border-color:#a5d6a7}',
     '#jira-banner b{margin-right:4px}',
+    '#jira-banner form{display:contents}',
+    '#jira-banner input.jira-user{position:absolute;width:1px;height:1px;min-width:0;padding:0;border:0;opacity:0;overflow:hidden}',
     '#jira-banner input{flex:1;min-width:200px;padding:6px 8px;border:1px solid #d9b45a;border-radius:6px;font:inherit;background:#fff;color:#222}',
     '#jira-banner input[type="checkbox"]{flex:none;min-width:0;width:auto;margin-right:4px;padding:0}',
     '#jira-banner label{font-size:12px;display:flex;align-items:center}',
@@ -201,12 +203,14 @@
   banner.id = "jira-banner";
   banner.innerHTML =
     '<b>Connect Jira:</b><span>Enter your Jira Personal Access Token.</span>' +
-    '<input type="password" autocomplete="off" placeholder="Paste your Jira token here …" aria-label="Jira Personal Access Token">' +
-    '<button type="button">Connect</button><a data-help>Where can I find my token?</a>' +
+    '<form data-token-form method="post" action="/jira/api/credentials">' +
+    '<input class="jira-user" type="text" name="username" value="jira-token" autocomplete="username" readonly tabindex="-1" aria-hidden="true">' +
+    '<input type="password" name="password" autocomplete="current-password" placeholder="Paste your Jira token here …" aria-label="Jira Personal Access Token">' +
+    '<button type="submit">Connect</button></form><a data-help>Where can I find my token?</a>' +
     '<label><input type="checkbox" data-remember disabled>Remember for my account</label>' +
     '<div class="remember-help"><span data-remember-reason role="status">Checking whether Remember is available … </span> ' +
     '<a data-remember-setup href="/jira/guide#remember-tokens-setup">Setup help</a></div><div class="msg"></div>';
-  var bannerInput = banner.querySelector("input");
+  var bannerInput = banner.querySelector('input[type="password"]');
   var bannerRemember = banner.querySelector("[data-remember]");
   var bannerRememberHelp = banner.querySelector(".remember-help");
   var bannerRememberReason = banner.querySelector("[data-remember-reason]");
@@ -238,8 +242,8 @@
       })
       .catch(function () { bannerMsg.textContent = "Connection failed."; });
   }
-  banner.querySelector("button").addEventListener("click", connectJira);
-  bannerInput.addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); connectJira(); } });
+  // Echtes Formular, damit der Passwortmanager des Browsers das Speichern des Tokens anbietet.
+  banner.querySelector("form").addEventListener("submit", function (e) { e.preventDefault(); connectJira(); });
   banner.querySelector("[data-help]").addEventListener("click", function () { openPanel("/jira/guide#jira-token"); });
   banner.querySelector("[data-remember-setup]").addEventListener("click", function (event) {
     event.preventDefault(); openPanel("/jira/guide#remember-tokens-setup");

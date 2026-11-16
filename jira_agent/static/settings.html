@@ -47,12 +47,16 @@
   <div class="hint">Leave blank to use the default name from your Jira account. Click Save to apply.</div>
   <p class="hint" style="margin-top:16px">Azure keys are kept in memory for this session. You can optionally remember your Jira token encrypted for your account.</p>
   <div id="jiraStatus"></div>
-  <label for="jiraToken">Jira Personal Access Token</label>
-  <input id="jiraToken" type="password" autocomplete="off">
-  <label style="font-weight:normal"><input id="rememberJira" type="checkbox" disabled> <span id="rememberJiraLabel">Remember for my account</span></label>
-  <div class="hint"><span id="rememberJiraHint" role="status">Checking whether Remember is available …</span>
-    <a id="rememberJiraSetup" href="/jira/guide#remember-tokens-setup">Setup help</a></div>
-  <div class="row"><button class="btn primary" id="connectJira">Connect to Jira</button><span id="jiraMsg"></span></div>
+  <form id="jiraForm" method="post" action="/jira/api/credentials">
+    <input type="text" name="username" value="jira-token" autocomplete="username" readonly tabindex="-1" aria-hidden="true" style="position:absolute;width:1px;height:1px;opacity:0;border:0;padding:0">
+    <label for="jiraToken">Jira Personal Access Token</label>
+    <input id="jiraToken" name="password" type="password" autocomplete="current-password">
+    <label style="font-weight:normal"><input id="rememberJira" type="checkbox" disabled> <span id="rememberJiraLabel">Remember for my account</span></label>
+    <div class="hint"><span id="rememberJiraHint" role="status">Checking whether Remember is available …</span>
+      <a id="rememberJiraSetup" href="/jira/guide#remember-tokens-setup">Setup help</a></div>
+    <div class="hint">Tip: let your browser's password manager save the token, then it fills it in for you next time.</div>
+    <div class="row"><button type="submit" class="btn primary" id="connectJira">Connect to Jira</button><span id="jiraMsg"></span></div>
+  </form>
   <label for="azureKey">Your Azure OpenAI key (optional)</label>
   <input id="azureKey" type="password" autocomplete="off">
   <div class="row"><button class="btn" id="setAzure">Use Azure key</button><span id="azureMsg"></span></div>
@@ -280,7 +284,8 @@
     state.selected.sort(); renderSelected(); msg("ucMsg", "Added. Click Save to apply.", true);
   });
 
-  $("connectJira").addEventListener("click", async function () {
+  $("jiraForm").addEventListener("submit", async function (event) {
+    event.preventDefault();
     var token = $("jiraToken").value.trim();
     if (!token) return msg("jiraMsg", "Please enter a token.", false);
     msg("jiraMsg", "Checking …");
