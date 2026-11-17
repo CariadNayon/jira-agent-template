@@ -41,6 +41,8 @@ class UserState:
     files: dict = field(default_factory=dict)          # vom Agenten erzeugte Dateien (Diagramme, Exporte)
     uploads: dict = field(default_factory=dict)        # vom Nutzer hochgeladene Dateien
     skills: dict | None = None                         # persönliche Skills (geladen aus dem Home-Ordner)
+    catalog_skills: tuple | None = None                # (Zeitpunkt, {name: Skill}, Gültigkeit) aus dem Skill-Katalog
+    catalog_message: str = ''
     credential_lock: threading.RLock = field(default_factory=threading.RLock)
     jira_restore_checked: bool = False
     jira_restore_retry_at: float = 0

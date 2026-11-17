@@ -24,7 +24,7 @@ Repo in VS Code öffnen und Copilot oder Claude in normaler Sprache sagen, was d
 
 Die Regeln für die KI stehen in [AGENTS.md](AGENTS.md), die Abläufe in [.claude/skills/](.claude/skills/).
 
-Die Umsetzung des robusteren Advanced-Unterbaus ist in [IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md) beschrieben. Aktueller erster Meilenstein: [Stabilitätsprüfung](docs/STABILITY.md).
+Die Umsetzung des robusteren Advanced-Unterbaus ist in [IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md) beschrieben. Aktueller erster Meilenstein: [Stabilitätsprüfung](docs/STABILITY.md). Optionaler gemeinsamer Skill-Katalog in Unity Catalog (standardmäßig aus, einmalige Einrichtung): [REGISTRY.md](docs/REGISTRY.md).
 
 ## Wiederverwenden und erweitern
 

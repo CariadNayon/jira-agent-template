@@ -46,6 +46,7 @@ Architektur, Tool-Auswahl und Wiederverwendung: `docs/EXTENDING.md`. Standard-Ji
 | `jira_agent/llm.py` | Modell-Provider (Azure Team-Key / eigener Key) |
 | `jira_agent/web.py`, `static/` | Zahnrad-UI, Anleitung (`/jira/guide`), Downloads |
 | `jira_agent/state.py` | Sitzungsdaten im Speicher (Keys, Dateien) |
+| `jira_agent/registry.py` | Gemeinsamer Skill-Katalog in Unity Catalog (Nutzerrechte, nur Parameter, siehe `docs/REGISTRY.md`) |
 | `jira_agent/testing.py` | FakeJira, FakeSql, FakeFiles, `run_tool` für Tests |
 | `agent_server/` | Server aus der Databricks-Vorlage |
 | `databricks.yml` (Rest) | Bundle: Ressourcen, Scopes, Umgebungsvariablen der App |

@@ -1,6 +1,6 @@
 # Umsetzungsplan: robustes Jira-Agenten-Template
 
-Stand: 17. November 2026. Umsetzung begonnen. P0: Offline-Baseline und reproduzierbare Fehlertests liegen vor; Live-Messung bleibt ohne Zugang offen. Erste Korrekturen aus P2/P3/P4 sind umgesetzt. Advanced-Migration, Lakebase und gemeinsamer Katalog sind noch nicht eingerichtet.
+Stand: 17. November 2026. Umsetzung begonnen. P0: Offline-Baseline und reproduzierbare Fehlertests liegen vor; Live-Messung bleibt ohne Zugang offen. Erste Korrekturen aus P2/P3/P4 sind umgesetzt. Von P5 ist der erste Schnitt umgesetzt: veröffentlichte, unveränderliche Skill-Versionen in Unity Catalog ([REGISTRY.md](REGISTRY.md), Schema `ude_dev_we_cariad_t1s_sandbox.t1_jira_agent`), standardmäßig aus und noch nicht gegen ein echtes Warehouse geprüft. Advanced-Migration, Lakebase, Agentenprofile und Freigabestatus sind noch nicht eingerichtet.
 
 ## Ziel und Entscheidungen
 

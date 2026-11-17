@@ -47,3 +47,10 @@ session:
   remember_jira_days: 30                # optionale verschlüsselte Ablage; benötigt App-Secret
   credentials_ttl_hours: 8               # Keys verfallen spätestens so lange nach Sitzungsbeginn (nur im Speicher)
   files_ttl_minutes: 60                  # erzeugte Diagramme/Exporte
+
+# Gemeinsamer Skill-Katalog in Unity Catalog (veröffentlichte, unveränderliche Versionen). Erst auf true setzen,
+# wenn ein Administrator die Tabelle angelegt hat: docs/REGISTRY.md. Zugriff regeln die UC-Rechte der Nutzer.
+registry:
+  enabled: false
+  catalog: ude_dev_we_cariad_t1s_sandbox
+  schema: t1_jira_agent

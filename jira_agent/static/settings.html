@@ -148,6 +148,8 @@
   async function loadSkills() {
     try {
       var list = await api("/jira/api/skills");
+      var reg = { enabled: false };
+      try { reg = await api("/jira/api/registry"); } catch (e) { /* optional feature */ }
       var box = $("skillList"); box.innerHTML = "";
       if (!list.length) { var p = document.createElement("p"); p.className = "hint"; p.textContent = "No skills yet."; box.appendChild(p); }
       list.forEach(function (s) {
@@ -155,13 +157,23 @@
         var top = document.createElement("div"); top.className = "top";
         var t = document.createElement("div");
         var n = document.createElement("b"); n.textContent = "/" + s.name; t.appendChild(n);
-        var badge = document.createElement("span"); badge.className = "badge" + (s.quelle === "team" ? "" : " own");
-        badge.textContent = s.quelle === "team" ? "Team" : "Personal"; t.appendChild(badge);
+        var shared = s.quelle === "team" || s.quelle === "katalog";
+        var badge = document.createElement("span"); badge.className = "badge" + (s.quelle === "persoenlich" ? " own" : "");
+        badge.textContent = s.quelle === "team" ? "Team" : s.quelle === "katalog" ? "Catalog v" + s.version : "Personal"; t.appendChild(badge);
         var acts = document.createElement("div"); acts.className = "acts";
-        if (s.quelle === "team") {
+        if (shared) {
           acts.appendChild(skillButton("View", function () { editSkill(s.name, true); }));
         } else {
           acts.appendChild(skillButton("Edit", function () { editSkill(s.name, false); }));
+          if (reg.enabled) acts.appendChild(skillButton("Publish to catalog", async function () {
+            if (!confirm("Publish /" + s.name + " to the shared skill catalog?\n\nEveryone with access to the catalog can then use it. " +
+                "A published version cannot be changed or deleted; later changes become a new version.")) return;
+            try {
+              var p = await api("/jira/api/registry/skills/" + encodeURIComponent(s.name) + "/publish", { method: "POST" });
+              msg("skillMsg", p.unchanged ? "Already published unchanged as version " + p.version + "." : "Published /" + s.name + " as version " + p.version + ".", true);
+              loadSkills(); notifyPage();
+            } catch (e) { msg("skillMsg", e.message, false); }
+          }));
           acts.appendChild(skillButton("Suggest for the team", function () {
             location.href = "/jira/api/skills/" + encodeURIComponent(s.name) + "/download";
             msg("skillMsg", "File downloaded. See Guide → Share a skill with your team for the next steps.", true);
@@ -176,6 +188,7 @@
         var desc = document.createElement("div"); desc.className = "hint"; desc.textContent = s.beschreibung; d.appendChild(desc);
         box.appendChild(d);
       });
+      if (reg.enabled && reg.message) msg("skillMsg", reg.message, false);
     } catch (e) { msg("skillMsg", "Unable to load skills: " + e.message, false); }
   }
   function showSkillForm(skill, readOnly) {

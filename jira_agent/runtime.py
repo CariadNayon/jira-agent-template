@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import os
 import re
+import time
 from typing import Mapping
 
 from jira_agent import BUNDLE, CFG
@@ -11,7 +12,7 @@ from jira_agent.data import SqlRunner
 from jira_agent.jira_client import JiraClient
 from jira_agent.llm import build_model
 from jira_agent.settings_store import SettingsStore
-from jira_agent.skills import PersonalSkillStore, active_skill_invocation, skills_prompt, team_skills
+from jira_agent.skills import PersonalSkillStore, active_skill_invocation, parse_invocation, skills_prompt, team_skills
 from jira_agent.state import FileSink, UploadSink, UserState, user_state
 from jira_agent.tools import ToolContext
 from jira_agent.uploads import prepare_uploads
@@ -173,6 +174,61 @@ def all_skills(state: UserState, email: str, token: str | None) -> dict:
     return {**load_personal_skills(state, email, token), **team_skills()}
 
 
+_CATALOG_TTL = 300      # Sekunden; Fehler werden nur kurz gemerkt, damit nicht jede Anfrage das Warehouse belastet
+_CATALOG_ERROR_TTL = 30
+
+
+def catalog_skills(state: UserState, token: str | None) -> dict:
+    """Veröffentlichte Skills aus dem Katalog (nur Namen/Beschreibungen), mit den Rechten des Nutzers."""
+    from jira_agent import registry
+    from jira_agent.skills import NAME_RE
+
+    if not (registry.enabled() and token and WAREHOUSE_ID):
+        return {}
+    cached = state.catalog_skills
+    if cached and time.monotonic() - cached[0] < cached[2]:
+        return cached[1]
+    listed, ttl = {}, _CATALOG_TTL
+    try:
+        for s in registry.SkillRegistry(user_client(token), WAREHOUSE_ID).list_latest():
+            if NAME_RE.fullmatch(s["name"]):
+                listed[s["name"]] = {**s, "beschreibung": " ".join(s["beschreibung"].split())[:200], "anleitung": ""}
+        state.catalog_message = ""
+    except Exception as exc:
+        state.catalog_message = str(exc) if isinstance(exc, registry.RegistryError) else \
+            "The skill catalog could not be loaded."
+        ttl = _CATALOG_ERROR_TTL
+    state.catalog_skills = (time.monotonic(), listed, ttl)
+    return listed
+
+
+def load_catalog_skill(state: UserState, token: str | None, name: str, version: int | None = None) -> dict | None:
+    from jira_agent import registry
+
+    if not (registry.enabled() and token and WAREHOUSE_ID):
+        return None
+    return registry.SkillRegistry(user_client(token), WAREHOUSE_ID).get(name, version)
+
+
+def with_catalog_skills(state: UserState, token: str | None, skills: dict) -> dict:
+    """Katalog-Skills ergänzen; persönliche und Team-Skills mit gleichem Namen haben Vorrang."""
+    return {**catalog_skills(state, token), **skills}
+
+
+def with_skill_instructions(state: UserState, token: str | None, skills: dict, name: str) -> dict:
+    """Die Anleitung eines aufgerufenen Katalog-Skills erst bei Bedarf laden."""
+    skill = skills.get(name)
+    if not skill or skill.get("quelle") != "katalog" or skill.get("anleitung"):
+        return skills
+    try:
+        full = load_catalog_skill(state, token, name)
+        text = full["anleitung"] if full else ""
+    except Exception:
+        text = ""
+    return {**skills, name: {**skill, "anleitung": text or
+            "The instructions of this catalog skill could not be loaded. Tell the user and do not guess them."}}
+
+
 def prepare(headers: Mapping[str, str], messages: list[dict], conversation_id: str = ""):
     """Liefert (agent, run_context) für Runner.run(agent, messages, context=run_context)."""
     from agents import Agent
@@ -205,8 +261,11 @@ def prepare(headers: Mapping[str, str], messages: list[dict], conversation_id: s
     user_text = last_user_text(messages)
     tools = available_tools(tool_ctx)
     tool_names = {t.name for t in tools}
-    available_skills = all_skills(state, email, token)
+    available_skills = with_catalog_skills(state, token, all_skills(state, email, token))
     skill_request = active_skill_invocation(messages, available_skills)
+    called = parse_invocation(skill_request if skill_request is not None else user_text)
+    if called:
+        available_skills = with_skill_instructions(state, token, available_skills, called[0])
     instructions = INSTRUCTIONS.format(
         name=agent_name(state, settings),
         tool_names=", ".join(t.name for t in tools),

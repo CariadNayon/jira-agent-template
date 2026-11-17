@@ -16,11 +16,12 @@ from fastapi import APIRouter, FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, Response
 from pydantic import BaseModel
 
-from jira_agent import CFG, __version__
+from jira_agent import CFG, __version__, registry
 from jira_agent.jira_client import JiraClient, JiraError
 from jira_agent.llm import PROVIDERS, check_azure_endpoint
-from jira_agent.runtime import (DEFAULT_SETTINGS, agent_name, all_skills, default_agent_name, identity,
-                                load_personal_skills, load_settings, user_client)
+from jira_agent.runtime import (DEFAULT_SETTINGS, WAREHOUSE_ID, agent_name, all_skills, catalog_skills,
+                                default_agent_name, identity, load_catalog_skill, load_personal_skills,
+                                load_settings, user_client, with_catalog_skills)
 from jira_agent.settings_store import SettingsStore, sanitize
 from jira_agent.skills import MAX_PERSONAL, PersonalSkillStore, check_skill, render_skill, team_skills
 from jira_agent.state import UploadSink, get_file, logout, user_state
@@ -293,21 +294,37 @@ class SkillBody(BaseModel):
 
 
 def _skill_list(skills: dict) -> list[dict]:
-    return [{"name": s["name"], "beschreibung": s["beschreibung"], "quelle": s["quelle"]}
-            for s in sorted(skills.values(), key=lambda s: (s["quelle"] != "team", s["name"]))]
+    order = {"team": 0, "katalog": 1}
+    return [{"name": s["name"], "beschreibung": s["beschreibung"], "quelle": s["quelle"],
+             **({"version": s["version"], "owner": s.get("owner")} if s["quelle"] == "katalog" else {})}
+            for s in sorted(skills.values(), key=lambda s: (order.get(s["quelle"], 2), s["name"]))]
 
 
 @router.get("/api/skills")
 async def list_skills(request: Request):
     email, token = _who(request)
     state = user_state(email)
-    return _skill_list(await asyncio.to_thread(all_skills, state, email, token))
+    own = await asyncio.to_thread(all_skills, state, email, token)
+    return _skill_list(await asyncio.to_thread(with_catalog_skills, state, token, own))
+
+
+async def _find_skill(name: str, request: Request) -> dict | None:
+    email, token = _who(request)
+    state = user_state(email)
+    skill = (await asyncio.to_thread(all_skills, state, email, token)).get(name)
+    if skill:
+        return skill
+    if not registry.enabled():
+        return None
+    try:
+        return await asyncio.to_thread(load_catalog_skill, state, token, name)
+    except registry.RegistryError as e:
+        raise HTTPException(502, str(e)) from None
 
 
 @router.get("/api/skills/{name}")
 async def get_skill(name: str, request: Request):
-    email, token = _who(request)
-    skill = (await asyncio.to_thread(all_skills, user_state(email), email, token)).get(name)
+    skill = await _find_skill(name, request)
     if not skill:
         raise HTTPException(404, "Skill not found.")
     return skill
@@ -315,12 +332,49 @@ async def get_skill(name: str, request: Request):
 
 @router.get("/api/skills/{name}/download")
 async def download_skill(name: str, request: Request):
-    email, token = _who(request)
-    skill = (await asyncio.to_thread(all_skills, user_state(email), email, token)).get(name)
+    skill = await _find_skill(name, request)
     if not skill:
         raise HTTPException(404, "Skill not found.")
     return Response(render_skill(skill), media_type="text/markdown; charset=utf-8",
                     headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(skill['name'])}.md"})
+
+
+# ---------------------------------------------------------------- Skill-Katalog (Unity Catalog, Nutzerrechte)
+@router.get("/api/registry")
+async def registry_status(request: Request, response: Response):
+    response.headers['Cache-Control'] = 'private, no-store'
+    email, token = _who(request)
+    state = user_state(email)
+    cfg = registry.settings()
+    if registry.enabled():
+        await asyncio.to_thread(catalog_skills, state, token)
+    return {"enabled": registry.enabled(), "location": f"{cfg['catalog']}.{cfg['schema']}" if registry.enabled() else "",
+            "message": state.catalog_message if registry.enabled() else ""}
+
+
+@router.post("/api/registry/skills/{name}/publish")
+async def publish_skill(name: str, request: Request, response: Response):
+    """Publish a personal skill as the next immutable catalog version. Needs MODIFY on the catalog table."""
+    response.headers['Cache-Control'] = 'private, no-store'
+    email, token = _who(request)
+    if not registry.enabled():
+        raise HTTPException(404, "The skill catalog is not enabled.")
+    state = user_state(email)
+    personal = await asyncio.to_thread(load_personal_skills, state, email, token)
+    skill = personal.get(name)
+    if not skill:
+        raise HTTPException(404, "Personal skill not found. Only your own skills can be published.")
+    try:
+        skill = check_skill(skill["name"], skill["beschreibung"], skill["anleitung"])
+        reg = registry.SkillRegistry(_client(token), WAREHOUSE_ID)
+        published = await asyncio.to_thread(reg.publish, skill, email)
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from None
+    except registry.RegistryError as e:
+        raise HTTPException(409, str(e)) from None
+    state.catalog_skills = None
+    return {"name": published["name"], "version": published["version"], "owner": published["owner"],
+            "unchanged": bool(published.get("unchanged"))}
 
 
 @router.put("/api/skills/{name}")

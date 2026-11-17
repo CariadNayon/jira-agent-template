@@ -382,7 +382,7 @@
       var row = document.createElement("div");
       if (i === active) row.className = "active";
       var b = document.createElement("b"); b.textContent = "/" + s.name; row.appendChild(b);
-      if (s.quelle === "team") { var t = document.createElement("span"); t.className = "team"; t.textContent = "Team"; row.appendChild(t); }
+      if (s.quelle === "team" || s.quelle === "katalog") { var t = document.createElement("span"); t.className = "team"; t.textContent = s.quelle === "team" ? "Team" : "Catalog"; row.appendChild(t); }
       var d = document.createElement("small"); d.textContent = s.beschreibung; row.appendChild(d);
       row.addEventListener("mousedown", function (e) { e.preventDefault(); choose(i); });
       popup.appendChild(row);
