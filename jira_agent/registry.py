@@ -11,10 +11,13 @@ concatenated into SQL. Catalog and schema come from the configuration and are va
 from __future__ import annotations
 
 import hashlib
+import logging
 import re
 import time
 
 from jira_agent import CFG
+
+_log = logging.getLogger("jira_agent.registry")
 
 _IDENT = re.compile(r"[A-Za-z0-9_]{1,128}")
 TABLE = "skill_versions"
@@ -95,7 +98,13 @@ class SkillRegistry:
             time.sleep(2)
             resp = api.get_statement(resp.statement_id)
         if resp.status.state != StatementState.SUCCEEDED:
-            message = (resp.status.error.message if resp.status.error else "") or ""
+            error = resp.status.error
+            message = (error.message if error else "") or ""
+            code = getattr(getattr(error, "error_code", None), "value", None) or str(getattr(error, "error_code", "") or "")
+            code = code if re.fullmatch(r"[A-Z0-9_]{1,64}", code or "") else ""
+            # The full text stays in the server log; users only get a fixed message plus the short error code.
+            _log.warning("Skill catalog statement failed: state=%s code=%s message=%s", resp.status.state.value, code,
+                         message[:500].replace("\n", " "))
             lowered = message.lower()
             if "table_or_view_not_found" in lowered or "cannot be found" in lowered:
                 raise RegistryError("The skill catalog is not set up yet. An administrator must create the table "
@@ -103,7 +112,7 @@ class SkillRegistry:
             if "permission" in lowered or "privilege" in lowered or "denied" in lowered:
                 raise RegistryError("You do not have access to the skill catalog. Ask an administrator for "
                                     "SELECT (read) or MODIFY (publish) on it.")
-            raise RegistryError("The skill catalog request failed.")
+            raise RegistryError("The skill catalog request failed" + (f" ({code})." if code else "."))
         return list((resp.result.data_array if resp.result else None) or [])
 
     @staticmethod

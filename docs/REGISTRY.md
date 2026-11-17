@@ -52,6 +52,7 @@ GRANT MODIFY ON TABLE `ude_dev_we_cariad_t1s_sandbox`.`t1_jira_agent`.`skill_ver
 ## So funktioniert es
 
 - **Rechte der Nutzer:** Lesen und Veröffentlichen laufen mit dem Workspace-Token des angemeldeten Nutzers. Die App benutzt dafür keine eigene Identität. Fehlt ein Recht, zeigt Settings → Skills eine verständliche Meldung; der Chat läuft normal weiter.
+- **Scope `sql`:** Damit das Veröffentlichen (ein `INSERT`) funktioniert, braucht die App den User-Scope `sql`; mit dem früheren `sql:restricted-query` wird das Schreiben abgewiesen. Der Scope steht in `databricks.yml` (`user_api_scopes`) und muss auch in den App-Einstellungen unter Authorization → User authorization gesetzt sein, wenn die App nicht mit `uv run deploy` bzw. `databricks bundle deploy` bereitgestellt wird. Nach der Änderung müssen sich Nutzer neu anmelden und zustimmen. Chat-Abfragen bleiben durch `check_readonly_sql` auf ein einzelnes SELECT beschränkt.
 - **Veröffentlichen:** Nur eigene persönliche Skills. Pro Veröffentlichung entsteht eine neue Version (1, 2, 3 …). Ein unveränderter Inhalt erzeugt keine neue Version.
 - **Namen:** Der erste Veröffentlicher besitzt den Namen. Andere können dafür keine weiteren Versionen anlegen (die Prüfung steckt in derselben SQL-Anweisung wie das Einfügen). Team-Skills aus `skills/` behalten ihre Namen.
 - **Vorrang:** Team-Skill vor persönlichem Skill vor Katalog-Skill mit gleichem Namen.

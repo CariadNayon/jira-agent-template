@@ -1,9 +1,11 @@
 """Lesender Tabellenzugriff mit den Rechten des Nutzers (on-behalf-of-user).
 
-Zwei Schutzschichten:
+Zwei Schutzschichten für Chat-Abfragen (Datenquellen im Zahnrad):
 1. check_readonly_sql: genau ein SELECT, nur auf freigegebenen, voll qualifizierten Tabellen, nur
    eingebaute Funktionen ohne Seiteneffekte (kein ai_query, http_request, secret, UDFs, ...).
-2. Der App-Scope sql:restricted-query erlaubt serverseitig nur lesende Abfragen.
+2. Die Rechte des Nutzers in Unity Catalog. Der App-Scope ist seit dem Skill-Katalog `sql` (vorher
+   sql:restricted-query), weil das Veröffentlichen von Skills (jira_agent/registry.py) schreiben muss.
+   Schreibende Anweisungen gibt es nur dort mit festem, parametrisiertem SQL; das Modell erreicht sie nie.
 """
 from __future__ import annotations
 

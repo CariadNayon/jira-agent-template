@@ -24,8 +24,9 @@ class FakeWarehouse:
 
     @staticmethod
     def _response(rows=None, error=None):
+        code = SimpleNamespace(value='PARSE_SYNTAX_ERROR')
         status = SimpleNamespace(state=StatementState.FAILED if error else StatementState.SUCCEEDED,
-                                 error=SimpleNamespace(message=error) if error else None)
+                                 error=SimpleNamespace(message=error, error_code=code) if error else None)
         return SimpleNamespace(statement_id='s1', status=status, result=SimpleNamespace(data_array=rows or []))
 
     def execute_statement(self, statement, warehouse_id, parameters=None, wait_timeout=None, row_limit=None):
@@ -150,6 +151,11 @@ def test_failures_are_explained_without_leaking_details(warehouse):
     warehouse.error = '[INSUFFICIENT_PERMISSIONS] user has no privilege MODIFY'
     with pytest.raises(registry.RegistryError, match='do not have access'):
         reg.publish({'name': 'sprint-notes', **SKILL}, ALICE)
+    warehouse.error = 'unexpected engine problem with internal detail'
+    with pytest.raises(registry.RegistryError) as other:
+        reg.list_latest()
+    assert str(other.value) == 'The skill catalog request failed (PARSE_SYNTAX_ERROR).'
+    assert 'internal detail' not in str(other.value)
 
 
 def test_publish_and_use_through_the_app(make_client, warehouse):

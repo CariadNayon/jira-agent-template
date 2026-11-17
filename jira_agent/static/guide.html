@@ -269,7 +269,7 @@ td,th{padding:8px 5px}
 <tr><td><code>experiment</code></td><td>MLflow experiment for this app</td><td>CAN_MANAGE, as in the bundle</td></tr>
 </tbody></table>
 <p>Open <b>Authorization → User authorization</b> and add these five scopes. A scope allows the app to call a particular API on behalf of the signed-in user.</p>
-<div class="prompt"><pre>sql:restricted-query
+<div class="prompt"><pre>sql
 catalog.catalogs:read
 catalog.schemas:read
 catalog.tables:read
@@ -469,7 +469,7 @@ description: Checks an issue for missing information
 <p><a href="https://github.com/CariadNayon/jira-agent-template/blob/main/docs/TOKEN_STORAGE.md" target="_blank" rel="noopener noreferrer">Full administrator setup instructions</a>. Keep secret values out of chat and source code.</p>
 <p>Until setup is complete, Connect still works for the current session. Remember stays disabled rather than storing the token without encryption.</p></details>
 <h3>User scopes: allowed APIs</h3><p>The app requests these API scopes during user authorization. They do not extend your own permissions.</p>
-<table><tr><th>Scope</th><th>Use</th></tr><tr><td><code>sql:restricted-query</code></td><td>Read-only queries with your permissions.</td></tr><tr><td><code>catalog.catalogs:read</code></td><td>List catalogs.</td></tr><tr><td><code>catalog.schemas:read</code></td><td>List schemas.</td></tr><tr><td><code>catalog.tables:read</code></td><td>Show tables and metadata.</td></tr><tr><td><code>workspace.workspace</code></td><td>Save personal settings and skills in your workspace user folder.</td></tr></table>
+<table><tr><th>Scope</th><th>Use</th></tr><tr><td><code>sql</code></td><td>Run SQL with your permissions: read-only chat queries, and publishing skills to the shared catalog.</td></tr><tr><td><code>catalog.catalogs:read</code></td><td>List catalogs.</td></tr><tr><td><code>catalog.schemas:read</code></td><td>List schemas.</td></tr><tr><td><code>catalog.tables:read</code></td><td>Show tables and metadata.</td></tr><tr><td><code>workspace.workspace</code></td><td>Save personal settings and skills in your workspace user folder.</td></tr></table>
 <h3>Three requirements for a table query</h3><ol><li>The app has the appropriate user scopes.</li><li>You have access to the warehouse, catalog, schema and table.</li><li>You selected and saved the table under <b>Settings → Data sources</b>.</li></ol>
 <p>Selecting a table does not grant permissions. SQL queries use your forwarded user token.</p>
 <h3>What is stored where?</h3><p>Plaintext session keys, temporary files and approval codes are kept in memory. Run exactly one worker. An optional remembered Jira token is stored encrypted in your personal workspace folder, bound to your account, app and Jira instance. The separate encryption key comes from an app secret; no token is stored in browser storage. Settings and personal skills are stored in the workspace user folder. Team skills are in the repository. Chat history is separate: without the optional database, the chat frontend does not store a persistent history.</p>

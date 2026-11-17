@@ -80,9 +80,11 @@ resources:
         #     key: ${var.token_encryption_secret_key}
         #     permission: 'READ'
 
-      # On-behalf-of-user access: SQL, Unity Catalog browsing and the user's settings file in their home folder
+      # On-behalf-of-user access: SQL, Unity Catalog browsing and the user's settings file in their home folder.
+      # "sql" (statt sql:restricted-query) ist nötig, damit Nutzer Skills in den Katalog schreiben können
+      # (INSERT über jira_agent/registry.py). Lesende Chat-Abfragen laufen weiter nur über check_readonly_sql.
       user_api_scopes:
-        - sql:restricted-query
+        - sql
         - catalog.catalogs:read
         - catalog.schemas:read
         - catalog.tables:read
