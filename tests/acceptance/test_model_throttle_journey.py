@@ -5,13 +5,14 @@ from unittest.mock import patch
 
 import httpx
 import pytest
-from agents import OpenAIChatCompletionsModel, Runner
+from agents import Runner
 from openai import RateLimitError
 
 from agent_server.evaluation import REFERENCE_SKILL
 from agent_server.utils import process_agent_stream_events
 from jira_agent import runtime
 from jira_agent.model_client import BoundedAzureClient
+from jira_agent.model_gate import QueuedAzureModel, clear_model_gates
 from jira_agent.model_input import make_run_config
 from jira_agent.state import logout, user_state
 from jira_agent.testing import FakeJira
@@ -51,7 +52,8 @@ def test_throttle_after_reference_issue_types_and_fields_does_not_restart_or_cre
             async with httpx.AsyncClient(transport=httpx.MockTransport(handle)) as http:
                 async with BoundedAzureClient(api_key='fixture-only', azure_endpoint='https://example.openai.azure.com',
                         api_version='2024-12-01-preview', http_client=http, max_retries=2) as client:
-                    model = OpenAIChatCompletionsModel(model='fixture', openai_client=client)
+                    model = QueuedAzureModel(model='fixture', openai_client=client,
+                        endpoint='https://example.openai.azure.com', queue_wait_seconds=30)
                     with patch.object(runtime, 'JiraClient', return_value=jira), patch.object(runtime, 'build_model', return_value=model):
                         messages = [{'role': 'user', 'content': '/testticket bitte erstellen'}]
                         agent, context = runtime.prepare({'x-forwarded-email': owner}, messages, 'throttle-chat')
@@ -68,6 +70,7 @@ def test_throttle_after_reference_issue_types_and_fields_does_not_restart_or_cre
                             run.cancel()
                         assert len(outputs) == 3
         finally:
+            clear_model_gates()
             logout(owner)
     asyncio.run(check())
     assert len(requests) == 4

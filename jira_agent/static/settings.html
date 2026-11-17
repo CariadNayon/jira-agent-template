@@ -66,7 +66,10 @@
 <section id="model">
   <label>Model</label>
   <div id="providers"></div>
-  <label for="deployment">Deployment</label><input id="deployment" type="text">
+  <label for="deployment">Deployment override (optional)</label><input id="deployment" type="text">
+  <div class="row"><button class="btn" type="button" id="useFastModel">Fast (template default)</button>
+    <button class="btn" type="button" id="useDetailedModel">Detailed</button></div>
+  <div class="hint" id="modelHint" role="status">Leave the override blank to follow the template default. Click Save to apply.</div>
   <label for="apiVersion">API version</label><input id="apiVersion" type="text">
   <div id="endpointBox"><label for="endpoint">Your Azure endpoint</label><input id="endpoint" type="text">
     <div class="hint">Only https://&lt;name&gt;.openai.azure.com or .cognitiveservices.azure.com. Enter your key under Connections.</div></div>
@@ -239,6 +242,23 @@
     $("endpointBox").style.display = p && p.needs_own_key ? "block" : "none";
   }
 
+  function updateModelHint() {
+    if (!state.defaults) return;
+    var override = $("deployment").value.trim();
+    $("modelHint").textContent = (override ? "Using saved/custom deployment: " + override :
+      "Using Fast template default: " + state.defaults.azure_deployment) +
+      ". Fast default: " + state.defaults.azure_deployment + ". Detailed preset: " +
+      (state.defaults.detailed_deployment || state.defaults.azure_deployment) +
+      ". The deployment must exist in your Azure resource. Click Save to apply from the next message.";
+  }
+  $("useFastModel").addEventListener("click", function () { $("deployment").value = ""; updateModelHint(); });
+  $("useDetailedModel").addEventListener("click", function () {
+    if (!state.defaults) return;
+    $("deployment").value = state.defaults.detailed_deployment || state.defaults.azure_deployment;
+    updateModelHint();
+  });
+  $("deployment").addEventListener("input", updateModelHint);
+
   function renderSelected() {
     var ul = $("selected"); ul.innerHTML = "";
     if (!state.selected.length) { var e = document.createElement("li"); e.textContent = "(none)"; ul.appendChild(e); }
@@ -338,7 +358,9 @@
       state.settings = me.settings; state.defaults = me.defaults; state.providers = me.providers;
       state.selected = (me.settings.selected_tables || []).slice();
       renderStatus(me); renderProviders(); renderSelected();
-      $("deployment").value = me.settings.azure_deployment || me.defaults.azure_deployment;
+      $("deployment").value = me.settings.azure_deployment || "";
+      $("deployment").placeholder = me.defaults.azure_deployment;
+      updateModelHint();
       $("apiVersion").value = me.settings.azure_api_version || me.defaults.azure_api_version;
       $("endpoint").value = me.settings.azure_endpoint || me.defaults.azure_endpoint;
       $("rulesText").value = me.settings.rules || "";

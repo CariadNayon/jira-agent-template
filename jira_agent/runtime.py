@@ -219,6 +219,8 @@ def prepare(headers: Mapping[str, str], messages: list[dict], conversation_id: s
         skills=skills_prompt(available_skills, skill_request if skill_request is not None else user_text),
     )
     model = build_model(settings["llm_provider"], CFG["llm"], settings, state.creds)
-    agent = Agent(name="Jira Agent", instructions=instructions, model=model, tools=build_function_tools(tool_ctx))
+    model_settings = getattr(model, '_jira_agent_model_settings', None)
+    model_options = {'model_settings': model_settings} if model_settings is not None else {}
+    agent = Agent(name="Jira Agent", instructions=instructions, model=model, tools=build_function_tools(tool_ctx), **model_options)
     return agent, RunContext(tool_ctx, state.secret, user_text, actions=state.actions,
                              conversation_id=f"{state.jira_user or ''}|{conversation_id}")

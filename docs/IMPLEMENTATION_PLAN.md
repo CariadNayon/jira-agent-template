@@ -147,3 +147,7 @@ Fertig, wenn: Jira-Kernfälle und Skill-Referenzfälle die Abnahme bestehen, Nut
 - https://github.com/databricks/app-templates/tree/71f815f6a6b09b514b79105390ad73ec0e6bf220/agent-openai-advanced
 - https://github.com/openai/openai-agents-python/blob/v0.20.0/docs/human_in_the_loop.md
 - https://github.com/openai/openai-agents-python/blob/v0.20.0/docs/sessions/index.md
+
+## Ergänzung v0.4.0
+
+Umgesetzt: Deployment-bezogene Parallelitätsgrenze, begrenzte Queue, geteilter Retry-After-Cooldown, natives SDK-Retry nur des Modellaufrufs, Tests nach freigegebener Jira-Änderung und Fast-/Detailed-Auswahl. Der Queue-/Cooldown-Anteil erhält 60 Sekunden kumulatives Budget; sonstiges SDK-Backoff bleibt bei 30 Sekunden. Keine verschachtelten HTTP-Retries. `gpt-4.1-mini` folgt dem vereinbarten Fast-Standard, explizite Overrides bleiben erhalten. Die bisherige Empfehlung für den ersten Standardkandidaten oben wird dadurch ersetzt; die Live-Abnahme bleibt offen. Automatisches Routing, produktionsweite TPM-/RPM-Steuerung und Advanced-/Lakebase-/UC-Arbeiten sind weiterhin nicht abgeschlossen.

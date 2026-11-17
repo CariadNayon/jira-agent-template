@@ -86,6 +86,8 @@ def azure_connection_scope():
 async def close_connections() -> None:
     """Run at application shutdown, after active requests have finished."""
     global _session_generation
+    from jira_agent.model_gate import clear_model_gates
+    clear_model_gates()
     shared = _async_clients.pop(asyncio.get_running_loop(), None)
     if shared is not None:
         await shared.aclose()

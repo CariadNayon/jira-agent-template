@@ -73,3 +73,9 @@ Nachtrag v0.3.1: Ein zusätzlicher SDK-Streamingtest reproduziert drei erfolgrei
 - Native SDK-Freigaben integrieren. Der aktuelle Legacy-Schreibpfad bleibt bis dahin aktiv; seine Belege sind weiterhin an den Worker und die Sitzung gebunden.
 - Strukturierte, versionierte Skills und Agentenprofile im gemeinsamen Unity Catalog ergänzen.
 - Live-Modellvergleich und Vorschau-Abnahme durchführen, bevor die laufende App auf den Advanced-Unterbau umgestellt wird.
+
+## v0.4.0: Modelllast begrenzen und nach Drosselung fortsetzen
+
+Der vorhandene Agents SDK übernimmt begrenzte Modellwiederholungen ohne Neustart früherer Tools. Queue/Cooldown wird pro Deployment geteilt; Anmeldedaten und Inhalte werden nicht geteilt. Der Fall „Ticket nach Freigabe erstellt, anschließend 429 mit Retry-After 32 Sekunden“ wird in beiden SDK-Ausgabewegen geprüft: nach virtuellem Warten derselbe Modellrequest, genau ein Jira-POST. Tests decken zusätzlich volle Queues, Abbrüche, hartes Kontingent, Provider-Vetos und verbleibendes Wartebudget ab. Details und Grenzen: [Performance](PERFORMANCE.md#deployment-auswahl-und-gemeinsame-lastgrenzen-v040).
+
+`gpt-4.1-mini` ist der neue Template-Standard. Persönliche Overrides bleiben erhalten; Fast → Save setzt sie zurück. Detailed wählt manuell `gpt-4.1`. Ein automatischer Modellrouter und Live-Qualitäts-/Kapazitätsmessungen sind damit noch nicht umgesetzt.

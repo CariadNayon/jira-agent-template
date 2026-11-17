@@ -63,6 +63,7 @@ async def me(request: Request, response: Response):
     return {
         "email": email,
         "app_version": __version__,
+        "effective_deployment": settings.get('azure_deployment') or CFG['llm']['deployment'],
         "jira_user": state.jira_user,
         "agent_name": agent_name(state, settings),
         "agent_name_default": default_agent_name(state.jira_display_name),
@@ -77,7 +78,8 @@ async def me(request: Request, response: Response):
         "jira_connection_message": state.jira_connection_message,
         "settings": settings,
         "defaults": {"rules": DEFAULT_SETTINGS["rules"], "azure_endpoint": CFG["llm"]["azure_endpoint"],
-                     "azure_deployment": CFG["llm"]["deployment"], "azure_api_version": CFG["llm"]["api_version"]},
+                     "azure_deployment": CFG["llm"]["deployment"], "azure_api_version": CFG["llm"]["api_version"],
+                     "detailed_deployment": CFG['llm'].get('detailed_deployment', CFG['llm']['deployment'])},
         "providers": [{"name": p.name, "label": p.label, "needs_own_key": p.needs_own_key}
                       for p in PROVIDERS.values()],
     }

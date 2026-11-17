@@ -44,8 +44,9 @@ def check_azure_endpoint(endpoint: str) -> str:
 
 
 def _azure_model(api_key: str, endpoint: str, api_version: str, deployment: str, *,
-                 max_retries: int = 2, retry_wait_seconds: float = 30, timeout_seconds: float = 60):
-    from agents import OpenAIChatCompletionsModel
+                 max_retries: int = 2, retry_wait_seconds: float = 30, timeout_seconds: float = 60,
+                 max_inflight: int = 1, max_pending: int = 8, queue_wait_seconds: float = 60):
+    from jira_agent.model_gate import QueuedAzureModel
     from jira_agent.model_client import BoundedAzureClient
     from jira_agent.connections import azure_http_client
 
@@ -53,7 +54,9 @@ def _azure_model(api_key: str, endpoint: str, api_version: str, deployment: str,
     client = BoundedAzureClient(api_key=api_key, api_version=api_version, azure_endpoint=endpoint,
                              max_retries=max_retries, retry_wait_seconds=retry_wait_seconds, timeout=timeout_seconds,
                              **({'http_client': http_client} if http_client is not None else {}))
-    model = OpenAIChatCompletionsModel(model=deployment, openai_client=client)
+    model = QueuedAzureModel(model=deployment, openai_client=client, endpoint=endpoint,
+                             max_inflight=max_inflight, max_pending=max_pending, queue_wait_seconds=queue_wait_seconds,
+                             model_retries=max_retries)
     model._jira_agent_client = client  # This factory owns one SDK client per run.
     return model
 
@@ -91,7 +94,9 @@ def _azure_own(cfg: dict, settings: dict, creds: dict):
 def _retry_settings(cfg: dict) -> dict:
     return {'max_retries': cfg.get('max_retries', 2),
             'retry_wait_seconds': cfg.get('retry_wait_seconds', 30),
-            'timeout_seconds': cfg.get('timeout_seconds', 60)}
+            'timeout_seconds': cfg.get('timeout_seconds', 60),
+            'max_inflight': cfg.get('max_inflight', 1), 'max_pending': cfg.get('max_pending', 8),
+            'queue_wait_seconds': cfg.get('queue_wait_seconds', 60)}
 
 
 def build_model(name: str, cfg: dict, settings: dict, creds: dict):

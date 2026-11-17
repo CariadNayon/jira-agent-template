@@ -81,6 +81,13 @@ def record_retry_wait(seconds: float, *, exhausted: bool = False):
         performance.add('azure_retry_wait_ms', seconds * 1000)
 
 
+def record_model_queue_wait(seconds: float, *, exhausted: bool = False):
+    performance = _current.get()
+    if performance:
+        performance.add('model_queue_timeouts' if exhausted else 'model_queue_entries')
+        performance.add('model_queue_wait_ms', seconds * 1000)
+
+
 class PerformanceHooks(RunHooksBase):
     def __init__(self, performance: Performance):
         self.performance = performance
