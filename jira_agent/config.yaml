@@ -51,6 +51,6 @@ session:
 # Gemeinsamer Skill-Katalog in Unity Catalog (veröffentlichte, unveränderliche Versionen). Erst auf true setzen,
 # wenn ein Administrator die Tabelle angelegt hat: docs/REGISTRY.md. Zugriff regeln die UC-Rechte der Nutzer.
 registry:
-  enabled: false
+  enabled: true
   catalog: ude_dev_we_cariad_t1s_sandbox
   schema: t1_jira_agent
