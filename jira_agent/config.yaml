@@ -11,6 +11,18 @@ llm:
   api_version: 2024-12-01-preview
   deployment: gpt-4.1-mini
   detailed_deployment: gpt-4.1          # explizite Auswahl für gründlichere Bearbeitung
+  # Dropdown für Chat-Deployments; Namen beim Kopieren an die eigene Azure-Ressource anpassen.
+  # Embedding-Modelle und Claude benötigen andere Schnittstellen und gehören nicht in diese Liste.
+  deployments:
+    - gpt-4.1-mini
+    - gpt-4.1
+    - gpt-4.1-nano
+    - gpt-4o
+    - gpt-4o-2
+    - gpt-4o-mini
+    - gpt-5-mini
+    - gpt-5-mini-traces
+    - gpt-5.2
   max_retries: 2                       # maximale Wiederholungen pro Modellaufruf
   retry_wait_seconds: 30               # SDK-Backoff-Budget ohne gemeinsamen 429-Cooldown
   timeout_seconds: 60                  # HTTP-Timeout pro Modellversuch

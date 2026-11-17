@@ -79,7 +79,8 @@ async def me(request: Request, response: Response):
         "settings": settings,
         "defaults": {"rules": DEFAULT_SETTINGS["rules"], "azure_endpoint": CFG["llm"]["azure_endpoint"],
                      "azure_deployment": CFG["llm"]["deployment"], "azure_api_version": CFG["llm"]["api_version"],
-                     "detailed_deployment": CFG['llm'].get('detailed_deployment', CFG['llm']['deployment'])},
+                     "detailed_deployment": CFG['llm'].get('detailed_deployment', CFG['llm']['deployment']),
+                     "azure_deployments": CFG['llm'].get('deployments', [])},
         "providers": [{"name": p.name, "label": p.label, "needs_own_key": p.needs_own_key}
                       for p in PROVIDERS.values()],
     }

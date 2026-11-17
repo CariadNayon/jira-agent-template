@@ -66,10 +66,14 @@
 <section id="model">
   <label>Model</label>
   <div id="providers"></div>
-  <label for="deployment">Deployment override (optional)</label><input id="deployment" type="text">
+  <label for="deploymentSelect">Model deployment</label>
+  <select id="deploymentSelect" disabled><option value="">Loading models …</option></select>
+  <div id="customDeploymentBox" hidden>
+    <label for="deployment">Custom deployment name</label><input id="deployment" type="text">
+  </div>
   <div class="row"><button class="btn" type="button" id="useFastModel">Fast (template default)</button>
     <button class="btn" type="button" id="useDetailedModel">Detailed</button></div>
-  <div class="hint" id="modelHint" role="status">Leave the override blank to follow the template default. Click Save to apply.</div>
+  <div class="hint" id="modelHint" role="status">Choose a model, then click Save. Use Custom deployment if yours is missing.</div>
   <label for="apiVersion">API version</label><input id="apiVersion" type="text">
   <div id="endpointBox"><label for="endpoint">Your Azure endpoint</label><input id="endpoint" type="text">
     <div class="hint">Only https://&lt;name&gt;.openai.azure.com or .cognitiveservices.azure.com. Enter your key under Connections.</div></div>
@@ -242,21 +246,44 @@
     $("endpointBox").style.display = p && p.needs_own_key ? "block" : "none";
   }
 
+  var CUSTOM_DEPLOYMENT = ":custom:";
+  function deploymentOverride() {
+    return $("deploymentSelect").value === CUSTOM_DEPLOYMENT ? $("deployment").value.trim() : $("deploymentSelect").value;
+  }
+  function selectDeployment(value) {
+    var known = Array.from($("deploymentSelect").options).some(function (option) { return option.value === value; });
+    $("deploymentSelect").value = known ? value : CUSTOM_DEPLOYMENT;
+    $("deployment").value = known ? "" : value;
+    updateModelHint();
+  }
+  function renderDeployments() {
+    var select = $("deploymentSelect"); select.innerHTML = "";
+    function option(value, label) {
+      var item = document.createElement("option"); item.value = value; item.textContent = label; select.appendChild(item);
+    }
+    option("", "Fast — template default (" + state.defaults.azure_deployment + ")");
+    var names = [state.defaults.azure_deployment, state.defaults.detailed_deployment].concat(state.defaults.azure_deployments || []);
+    names.filter(function (name, index) { return typeof name === "string" && name && names.indexOf(name) === index; })
+      .forEach(function (name) { option(name, name + (name === state.defaults.detailed_deployment ? " — Detailed" : "")); });
+    option(CUSTOM_DEPLOYMENT, "Custom deployment …");
+    select.disabled = false;
+    selectDeployment(state.settings.azure_deployment || "");
+  }
   function updateModelHint() {
     if (!state.defaults) return;
-    var override = $("deployment").value.trim();
-    $("modelHint").textContent = (override ? "Using saved/custom deployment: " + override :
-      "Using Fast template default: " + state.defaults.azure_deployment) +
-      ". Fast default: " + state.defaults.azure_deployment + ". Detailed preset: " +
-      (state.defaults.detailed_deployment || state.defaults.azure_deployment) +
-      ". The deployment must exist in your Azure resource. Click Save to apply from the next message.";
+    var custom = $("deploymentSelect").value === CUSTOM_DEPLOYMENT;
+    $("customDeploymentBox").hidden = !custom;
+    var override = deploymentOverride();
+    $("modelHint").textContent = (custom && !override ? "Enter your custom deployment name" :
+      "Selected deployment: " + (override || state.defaults.azure_deployment)) +
+      ". The list is configured for this app; availability depends on your Azure endpoint and access. Click Save to apply from the next message.";
   }
-  $("useFastModel").addEventListener("click", function () { $("deployment").value = ""; updateModelHint(); });
+  $("useFastModel").addEventListener("click", function () { if (state.defaults) selectDeployment(""); });
   $("useDetailedModel").addEventListener("click", function () {
     if (!state.defaults) return;
-    $("deployment").value = state.defaults.detailed_deployment || state.defaults.azure_deployment;
-    updateModelHint();
+    selectDeployment(state.defaults.detailed_deployment || state.defaults.azure_deployment);
   });
+  $("deploymentSelect").addEventListener("change", updateModelHint);
   $("deployment").addEventListener("input", updateModelHint);
 
   function renderSelected() {
@@ -337,10 +364,15 @@
   $("resetRules").addEventListener("click", function () { $("rulesText").value = state.defaults.rules; });
 
   $("save").addEventListener("click", async function () {
+    if (!state.defaults) { msg("saveMsg", "Wait for settings to load before saving.", false); return; }
+    var deployment = deploymentOverride();
+    if ($("deploymentSelect").value === CUSTOM_DEPLOYMENT && !deployment) {
+      msg("saveMsg", "Enter a custom deployment name or choose a model from the list.", false); return;
+    }
     var body = {
       agent_name: $("agentName").value.trim(),
       rules: $("rulesText").value, selected_tables: state.selected, llm_provider: provider(),
-      azure_deployment: $("deployment").value.trim(), azure_api_version: $("apiVersion").value.trim(),
+      azure_deployment: deployment, azure_api_version: $("apiVersion").value.trim(),
       azure_endpoint: $("endpoint").value.trim()
     };
     msg("saveMsg", "Saving …");
@@ -358,9 +390,7 @@
       state.settings = me.settings; state.defaults = me.defaults; state.providers = me.providers;
       state.selected = (me.settings.selected_tables || []).slice();
       renderStatus(me); renderProviders(); renderSelected();
-      $("deployment").value = me.settings.azure_deployment || "";
-      $("deployment").placeholder = me.defaults.azure_deployment;
-      updateModelHint();
+      renderDeployments();
       $("apiVersion").value = me.settings.azure_api_version || me.defaults.azure_api_version;
       $("endpoint").value = me.settings.azure_endpoint || me.defaults.azure_endpoint;
       $("rulesText").value = me.settings.rules || "";
