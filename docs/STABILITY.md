@@ -66,6 +66,8 @@ Der Bericht enthält pro Fall und Wiederholung Erfolg, Tool-Namen, Laufzeit, Mod
 
 ## Was danach folgt
 
+Nachtrag v0.3.1: Ein zusätzlicher SDK-Streamingtest reproduziert drei erfolgreiche Jira-Metadatenaufrufe und eine anschließende Modell-429. Er prüft, dass kein Schreibaufruf und kein Agentenneustart erfolgt und der Wartehinweis erhalten bleibt. Weitere Tests prüfen die Meldungen für Rate Limits, ausgeschöpfte Kontingente und das Aktualisieren eines bereits heruntergeladenen Frontends. Damit ist die Fehlerbehandlung geprüft, nicht die verfügbare Live-Kapazität erhöht.
+
 - SDK-Sessions und Hintergrundausführung aus der festgelegten Advanced-Vorlage übernehmen.
 - Lakebase für Verlauf, freigegebene Laufzustände und dauerhafte Aktionsbelege einrichten; Besitzerprüfungen für Session-/Response-IDs abnehmen.
 - Native SDK-Freigaben integrieren. Der aktuelle Legacy-Schreibpfad bleibt bis dahin aktiv; seine Belege sind weiterhin an den Worker und die Sitzung gebunden.

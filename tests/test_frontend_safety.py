@@ -32,6 +32,8 @@ def frontend(tmp_path):
     ([{'type':'tool-output-available','output':{'status':'OK'}}, {'type':'error','errorText':'after write'}], False, True),
     ([{'type':'text-delta','delta':'Hello'}, {'type':'error','errorText':'mid-text'}], False, True),
     ([{'type':'text-delta','delta':'Hello'}, {'type':'finish'}], False, False),
+    ([{'type':'error','errorText':'Error code: 429'}], False, True),
+    ([{'type':'error','errorText':'The AI model service is rate-limited (429). Wait about 45 seconds before continuing.'}], False, True),
     ([], True, True),
     ([{'type':'tool-output-available','output':{'status':'OK'}}], True, True),
 ])
@@ -62,6 +64,14 @@ drainStreamToWriter(uiStream,{write:x=>written.push(x)}).then(result=>{
     assert result['result']['failed'] is False
     if expect_error:
         assert result['written'][-1]['type'] == 'data-error'
+        message = result['written'][-1]['data']
+        assert 'If you already approved a Jira change' in message
+        assert 'Before retrying, check whether a Jira change was already applied.' not in message
+        assert 'No Jira change was made' not in message
+        if any('429' in c.get('errorText', '') for c in chunks):
+            assert 'rate' in message and '429' in message
+        if any('45 seconds' in c.get('errorText', '') for c in chunks):
+            assert '45 seconds' in message
     expected = [x for x in chunks if x['type'] != 'error']
     assert (result['written'][:-1] if expect_error else result['written']) == expected
 
@@ -96,3 +106,21 @@ def test_changed_upstream_fails_before_any_file_is_written(tmp_path):
     with pytest.raises(RuntimeError, match='Streaming-Ausweichpfad'):
         ensure_frontend_safety(tmp_path)
     assert route.read_text() == before
+
+
+def test_upgrade_previous_patch_in_an_existing_frontend(tmp_path):
+    route, fallback = frontend(tmp_path)
+    legacy = _SIGNATURE + '''
+  // Jira Agent: never replay an agent run after a transport failure.
+  const reader = uiStream.getReader();
+  try { return { failed: false }; }
+  finally { reader.releaseLock(); }
+}
+// rest of upstream module
+'''
+    fallback.write_text(legacy)
+    ensure_frontend_safety(tmp_path)
+    assert 'contextual service errors' in fallback.read_text()
+    assert 'If you already approved' in fallback.read_text()
+    assert '// rest of upstream module' in fallback.read_text()
+    assert 'maxRetries: 0' in route.read_text()

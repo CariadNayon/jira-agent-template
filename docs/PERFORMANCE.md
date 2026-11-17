@@ -56,3 +56,13 @@ uv run pytest tests -q
 Die Tests verwenden einen lokalen HTTP/1.1-Server und das echte OpenAI SDK: Wiederverwendung derselben TCP-Verbindung, getrennte Authentifizierungs-Header, unterdrückte Cookies, Event-Loop-Grenzen und sichtbare HTTP-429-Wiederholungen. Weitere Tests prüfen Modell-/Tool-Zähler einschließlich Streaming, Tokenmessung, Fehler-/Abbruchpfade, bestehende Server-Lifespans, Skill-Cache und die Fachanweisungen.
 
 Das belegt keine bestimmte Live-Beschleunigung. Erst die Messungen in der bereitgestellten App zeigen die tatsächlichen Azure-, Jira- und Netzwerklaufzeiten. Es wird kein zusätzlicher Dienst und kein neues Paket benötigt.
+
+## Modell-429 nach erfolgreichen Jira-Leseaufrufen
+
+Ein Ablauf wie `jira_get_issue` → `jira_list_issue_types` → `jira_get_create_fields` benötigt anschließend eine weitere Modellantwort. Eine 429 außerhalb der Tool-Ergebnisse deutet auf die Modell-/AI-Service-Seite hin; abgeschlossene Leseaufrufe belegen keine Ticketerstellung. Die Ursache und das aktive Kontingent müssen mit den App-/Azure-Messwerten geprüft werden.
+
+Ab v0.3.1 erklärt der Modellclient eine endgültige 429 ohne rohe Anbieterantwort. Ein vorhandener `Retry-After` wird als Wartehinweis übernommen. Meldet der Anbieter ausdrücklich `insufficient_quota` oder `billing_hard_limit_reached`, verlangt die Meldung eine Prüfung des Kontingents statt eines bloßen Wartens. Der Fehler sagt nichts darüber aus, ob zuvor im Auftrag eine Jira-Änderung erfolgte.
+
+Die Oberfläche erklärt auch knappe ältere Meldungen wie `Error code: 429` und weist nur bedingt auf Jira hin: Wer bereits eine Änderung freigegeben hat, soll deren Ergebnis vor einer Wiederholung prüfen. Der Agent wird weiterhin weder nach Dienstfehlern noch nach leeren/abgebrochenen Streams automatisch neu gestartet. Bereits übertragene Ergebnisse bleiben erhalten; eine leere Anzeige gilt nicht als Nachweis, dass keine Änderung erfolgt ist.
+
+Für die Ursachenprüfung erfassen: Zeitpunkt, App-Version, tatsächliches Deployment aus Settings → Model, `azure_http_status_429`, `azure_retry_budget_exhausted`, vorhandenes Retry-After und die zugeteilten TPM-/RPM-Grenzen. Keine Tokens oder Schlüssel weitergeben. Mehr Wiederholungen erhöhen kein Kontingent; ein anderes Deployment hilft nur mit tatsächlich verfügbarer Kapazität. Ein Modellwechsel oder eine Kürzung des Kontexts wird nicht ohne Prüfung als Fehlerbehebung ausgegeben.

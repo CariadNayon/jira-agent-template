@@ -5,7 +5,7 @@ before the first chunk reaches the browser. Apply before building on each start.
 """
 from pathlib import Path
 
-_MARKER = "// Jira Agent: never replay an agent run after a transport failure."
+_MARKER = "// Jira Agent: contextual service errors; never replay an agent run."
 _STREAM_ANCHOR = "    const result = streamText({\n"
 _RETRY_MARKER = "      maxRetries: 0, // Jira Agent: retries require action reconciliation.\n"
 _SIGNATURE = """export async function drainStreamToWriter(
@@ -13,15 +13,22 @@ _SIGNATURE = """export async function drainStreamToWriter(
   writer: UIMessageStreamWriter,
 ): Promise<{ failed: boolean; errorText?: string }> {"""
 _SAFE_DRAIN = _SIGNATURE + """
-  // Jira Agent: never replay an agent run after a transport failure.
+  // Jira Agent: contextual service errors; never replay an agent run.
   const reader = uiStream.getReader();
   try {
     for (let chunk = await reader.read(); !chunk.done; chunk = await reader.read()) {
       if (chunk.value.type === 'error') {
+        let message = chunk.value.errorText || 'The request failed.';
+        // Older backends report only "Error code: 429". New backends include a safe
+        // service explanation and Retry-After when the provider supplied it.
+        if (/\\b429\\b/.test(message) && !message.startsWith('The AI model service ')) {
+          message = 'The AI service reached a rate or capacity limit (429). '
+            + 'Wait a moment before continuing. If this persists, ask an app administrator to check the model deployment quota.';
+        }
         writer.write({ type: 'data-error', data:
-          (chunk.value.errorText || 'The request failed.')
-          + ' No automatic retry will be made. '
-          + 'Before retrying, check whether a Jira change was already applied.' });
+          message
+          + ' The agent was not restarted. '
+          + 'If you already approved a Jira change, check its result before repeating that action.' });
         return { failed: false };
       }
       writer.write(chunk.value);
@@ -29,7 +36,7 @@ _SAFE_DRAIN = _SIGNATURE + """
   } catch (error) {
     writer.write({ type: 'data-error', data:
       'The connection was interrupted. The agent was not restarted. '
-      + 'A Jira action may still be running or may already have completed. Please check first.' });
+      + 'If you already approved a Jira change, it may still be running or may have completed. Check its result before repeating that action.' });
   } finally {
     reader.releaseLock();
   }
@@ -56,7 +63,9 @@ def ensure_frontend_safety(frontend: Path) -> None:
         start = source.index(_SIGNATURE)
         end = source.index("\n}\n", start) + 3
         original = source[start:end]
-        if "reader.releaseLock()" not in original or "receivedTextChunk" not in original:
+        if "reader.releaseLock()" not in original or not (
+            "receivedTextChunk" in original or "// Jira Agent: never replay an agent run after a transport failure." in original
+        ):
             raise RuntimeError("Chat-Frontend geändert: Streaming-Ausweichpfad ist unbekannt.")
         source = source[:start] + _SAFE_DRAIN + source[end:]
     for before, after in _LEGACY_MESSAGES.items():
