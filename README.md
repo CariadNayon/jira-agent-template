@@ -24,6 +24,8 @@ Repo in VS Code öffnen und Copilot oder Claude in normaler Sprache sagen, was d
 
 Die Regeln für die KI stehen in [AGENTS.md](AGENTS.md), die Abläufe in [.claude/skills/](.claude/skills/).
 
+Die Umsetzung des robusteren Advanced-Unterbaus ist in [IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md) beschrieben. Aktueller erster Meilenstein: [Stabilitätsprüfung](docs/STABILITY.md).
+
 ## Wiederverwenden und erweitern
 
 Jira ist der Basis-Anwendungsfall. Die Laufzeit, Tool-Registrierung, Bestätigungen und Skills können für eigene Agenten wiederverwendet werden. [Erweiterungsleitfaden](docs/EXTENDING.md): Architektur, Tool-Auswahl über `agent.enabled_tools`, neue Integrationen und Tests.
@@ -64,6 +66,7 @@ Voraussetzungen: [uv](https://docs.astral.sh/uv/getting-started/installation/) �
 |---|---|
 | Einrichten (einmalig) | `uv run quickstart --profile <profil> --skip-lakebase` |
 | Tests (ohne Jira oder Databricks) | `uv run pytest tests -q` |
+| Stabilitätsfälle wiederholen (offline) | `uv run stability-check --repeat 2` |
 | Jira-/Datei-Abnahme (offline) | `uv run agent-evaluate` |
 | Optionale Modelltests anzeigen | `uv run agent-evaluate --list` |
 | Lokal starten | `uv run start-app`, danach http://localhost:8000 |

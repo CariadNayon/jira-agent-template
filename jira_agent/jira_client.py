@@ -4,6 +4,7 @@ from __future__ import annotations
 import re
 
 import requests
+from jira_agent.write_outcome import InputValidationError, begin_write, finish_write
 
 KEY_RE = re.compile(r"[A-Z][A-Z0-9_]+-\d+")
 PROJECT_RE = re.compile(r"[A-Z][A-Z0-9_]+")
@@ -11,9 +12,10 @@ USER_RE = re.compile(r"[\w.\-@]+")
 
 
 class JiraError(Exception):
-    def __init__(self, message: str, *, status_code: int | None = None):
+    def __init__(self, message: str, *, status_code: int | None = None, no_change: bool = False):
         super().__init__(message)
         self.status_code = status_code
+        self.no_change = no_change
 
 
 class JiraClient:
@@ -40,35 +42,39 @@ class JiraClient:
         try:
             r = self.request("GET", "/myself")
         except requests.RequestException as e:
-            raise JiraError(f"Jira is unreachable: {type(e).__name__}") from None
+            raise JiraError(f"Jira is unreachable: {type(e).__name__}", no_change=True) from None
         if r.status_code != 200 or "json" not in r.headers.get("Content-Type", ""):
-            raise JiraError(f"Jira sign-in failed (HTTP {r.status_code}).", status_code=r.status_code)
+            raise JiraError(f"Jira sign-in failed (HTTP {r.status_code}).", status_code=r.status_code, no_change=True)
         return r.json()
 
     @staticmethod
     def check_key(issue_key: str) -> str:
+        if not isinstance(issue_key, str):
+            raise InputValidationError('Issue key must be a string.')
         key = (issue_key or "").strip().upper()
         if not KEY_RE.fullmatch(key):
-            raise ValueError(f"Invalid issue key: {key!r}")
+            raise InputValidationError(f"Invalid issue key: {key!r}")
         return key
 
     @staticmethod
     def check_user(user_name: str) -> str:
-        if not USER_RE.fullmatch(user_name or ""):
-            raise ValueError(f"Invalid username: {user_name!r}")
+        if not isinstance(user_name, str) or not USER_RE.fullmatch(user_name or ""):
+            raise InputValidationError(f"Invalid username: {user_name!r}")
         return user_name
 
     @staticmethod
     def check_project(project: str) -> str:
+        if not isinstance(project, str):
+            raise InputValidationError('Project key must be a string.')
         key = (project or "").strip().upper()
         if not PROJECT_RE.fullmatch(key):
-            raise ValueError("Invalid project key.")
+            raise InputValidationError("Invalid project key.")
         return key
 
     @staticmethod
     def check_text(text: str, name: str, limit: int) -> str:
         if not isinstance(text, str) or not text.strip() or len(text) > limit:
-            raise ValueError(f"{name}: 1–{limit} characters required.")
+            raise InputValidationError(f"{name}: 1–{limit} characters required.")
         return text
 
     def resolve_user(self, user_name: str) -> str:
@@ -106,7 +112,7 @@ class JiraClient:
 
     def create_fields(self, project: str, issue_type_id: str) -> list[dict]:
         if not re.fullmatch(r"[0-9]+", issue_type_id or ""):
-            raise ValueError("Issue type ID must be numeric (see project issue types).")
+            raise InputValidationError("Issue type ID must be numeric (see project issue types).")
         return self._metadata_pages(
             f"/issue/createmeta/{self.check_project(project)}/issuetypes/{issue_type_id}")
 
@@ -123,19 +129,25 @@ class JiraClient:
     # Alle Helfer werfen JiraError mit verständlicher Meldung, wenn Jira einen Fehler meldet.
 
     def _call(self, method: str, path: str, ok: tuple = (200, 201, 204), **kwargs):
+        attempt = begin_write(method)
         try:
             r = self.request(method, path, **kwargs)
         except requests.RequestException as e:
-            raise JiraError(f"Jira is unreachable: {type(e).__name__}") from None
+            raise JiraError(f"Jira is unreachable: {type(e).__name__}",
+                            no_change=method.upper() in ('GET', 'HEAD', 'OPTIONS')) from None
+        # A timeout/5xx/ambiguous response must retain its consumed approval.
+        rejected = r.status_code in (400, 401, 403, 404, 405, 409, 422, 429)
+        finish_write(attempt, rejected=rejected)
         if r.status_code not in ok:
-            raise JiraError(f"Jira error (HTTP {r.status_code}): {r.text[:300]}", status_code=r.status_code)
+            raise JiraError(f"Jira error (HTTP {r.status_code}): {r.text[:300]}", status_code=r.status_code,
+                            no_change=rejected or method.upper() in ('GET', 'HEAD', 'OPTIONS'))
         return r.json() if r.content else {}
 
     def search(self, jql: str, max_results: int = 20, fields: str = "summary,status,priority,assignee,updated",
                start_at: int = 0) -> dict:
         """Tickets per JQL. Liefert {"total": n, "issues": [...]} (Rohdaten von Jira)."""
         if start_at < 0:
-            raise ValueError("start_at must not be negative.")
+            raise InputValidationError("start_at must not be negative.")
         return self._call("GET", "/search", params={"jql": jql, "startAt": int(start_at), "maxResults": max(1, min(int(max_results), 100)),
                                                      "fields": fields})
 
@@ -172,15 +184,15 @@ class JiraClient:
         options = self.transitions(issue_key)
         matches = [t for t in options if wanted in (t["id"], t["name"].lower(), (t["to"] or "").lower())]
         if not matches:
-            raise JiraError(f"Transition '{name_or_id}' is unavailable. Available: {[t['name'] for t in options]}")
+            raise JiraError(f"Transition '{name_or_id}' is unavailable. Available: {[t['name'] for t in options]}", no_change=True)
         if len(matches) > 1:
-            raise JiraError("Multiple transitions match. Please provide the specific transition ID.")
+            raise JiraError("Multiple transitions match. Please provide the specific transition ID.", no_change=True)
         match = matches[0]
         body: dict = {"transition": {"id": match["id"]}}
         if fields:
             unknown = set(fields) - set(match["fields"])
             if unknown:
-                raise ValueError(f"Fields unavailable for this transition: {sorted(unknown)}")
+                raise InputValidationError(f"Fields unavailable for this transition: {sorted(unknown)}")
             body["fields"] = fields
         if comment:
             body["update"] = {"comment": [{"add": {"body": comment}}]}
@@ -217,7 +229,7 @@ class JiraClient:
     def add_worklog(self, issue_key: str, time_spent: str, comment: str = "") -> None:
         """Arbeitszeit buchen, time_spent im Jira-Format, z. B. "1h 30m"."""
         if not re.fullmatch(r"(?:[1-9][0-9]*[wdhm])(?:\s+[1-9][0-9]*[wdhm])*", time_spent or ""):
-            raise ValueError("Provide work duration in Jira format, e.g. 1h 30m.")
+            raise InputValidationError("Provide work duration in Jira format, e.g. 1h 30m.")
         self._call("POST", f"/issue/{self.check_key(issue_key)}/worklog",
                    json={"timeSpent": time_spent, "comment": comment})
 

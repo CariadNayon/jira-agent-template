@@ -74,6 +74,13 @@ def record_http_status(service: str, status: int):
         performance.add(f'{service}_status_{int(status)}')
 
 
+def record_retry_wait(seconds: float, *, exhausted: bool = False):
+    performance = _current.get()
+    if performance:
+        performance.add('azure_retry_budget_exhausted' if exhausted else 'azure_retry_waits')
+        performance.add('azure_retry_wait_ms', seconds * 1000)
+
+
 class PerformanceHooks(RunHooksBase):
     def __init__(self, performance: Performance):
         self.performance = performance

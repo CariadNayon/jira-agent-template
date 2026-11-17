@@ -87,11 +87,13 @@ def jira_search(ctx: ToolContext, jql: str, max_results: int = 20, start_at: int
 
 @tool(needs=["jira"])
 def jira_get_issue(ctx: ToolContext, issue_key: str) -> dict:
-    """Returns issue details and description.
+    """Returns issue details, the actual project and description. Use project.key to work in the same project.
 
     issue_key: issue key, e.g. ABC-123"""
-    issue = ctx.jira.issue(issue_key, fields="summary,description,status,priority,components,assignee,labels,updated")
+    issue = ctx.jira.issue(issue_key, fields="project,summary,description,status,priority,components,assignee,labels,updated")
     out = summarize_issue(issue)
+    project = issue.get('fields', {}).get('project') or {}
+    out['project'] = {'key': project.get('key'), 'name': project.get('name')}
     out["labels"] = issue.get("fields", {}).get("labels")
     out["description"] = (issue.get("fields", {}).get("description") or "")[:3000]
     out["url"] = ctx.jira.issue_url(issue_key)

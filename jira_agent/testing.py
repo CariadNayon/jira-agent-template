@@ -143,6 +143,7 @@ class FakeJira(JiraClient):
     def _jira_issue(self, key: str) -> dict:
         i = self.issues[key]
         return {"key": key, "fields": {
+            "project": i.get('project') or {'key': key.split('-')[0], 'name': key.split('-')[0]},
             "summary": i.get("summary"), "description": i.get("description", ""),
             "status": {"name": i.get("status")}, "priority": {"name": i.get("priority")} if i.get("priority") else None,
             "assignee": {"name": i["assignee"]} if i.get("assignee") else None,

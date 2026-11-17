@@ -44,6 +44,8 @@ class ActionLedger:
         result["already_executed" if record.state == "completed" else "receipt_replayed"] = True
         result["hinweis"] = ("Saved result for this approval. The action was not run again."
                              if record.state == "completed" else
+                             "The attempt was rejected without a change. Correct the problem and request a new preview and approval."
+                             if record.state == "failed" else
                              "The outcome of this action is unknown. Do not retry automatically; check the target system first.")
         return result
 
@@ -52,7 +54,7 @@ class ActionLedger:
             previous_code = self._latest.get(fingerprint)
             previous = self._records.get(previous_code) if previous_code else None
             if previous:
-                if previous.state in ("running", "uncertain") or (previous.state == "completed" and confirmation_message):
+                if previous.state in ("running", "uncertain") or (previous.state in ("completed", "failed") and confirmation_message):
                     return None, self._receipt(previous)
                 if previous.state == "pending" and self._clock() < previous.expires:
                     return previous_code, None
@@ -80,8 +82,8 @@ class ActionLedger:
             record.state = "running"  # atomic single-use claim BEFORE calling any external service
             return True, None
 
-    def finish(self, code: str, result: dict, *, uncertain: bool = False) -> None:
+    def finish(self, code: str, result: dict, *, uncertain: bool = False, failed: bool = False) -> None:
         with self._lock:
             record = self._records[code]
             record.result = copy.deepcopy(result)
-            record.state = "uncertain" if uncertain else "completed"
+            record.state = "uncertain" if uncertain else "failed" if failed else "completed"

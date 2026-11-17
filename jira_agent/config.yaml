@@ -10,6 +10,9 @@ llm:
   azure_endpoint: https://inc43errormana0783142845.cognitiveservices.azure.com/
   api_version: 2024-12-01-preview
   deployment: gpt-4o-2
+  max_retries: 2                       # maximale Wiederholungen pro Modellaufruf
+  retry_wait_seconds: 30               # gesamtes Backoff-Wartebudget pro Agentenlauf
+  timeout_seconds: 60                  # HTTP-Timeout pro Modellversuch
   # Zentraler Team-Key: App-Ressource "secret" (AZURE_OPENAI_KEY), sonst Secret aus databricks.yml.
 
 data:

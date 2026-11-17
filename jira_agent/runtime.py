@@ -11,7 +11,7 @@ from jira_agent.data import SqlRunner
 from jira_agent.jira_client import JiraClient
 from jira_agent.llm import build_model
 from jira_agent.settings_store import SettingsStore
-from jira_agent.skills import PersonalSkillStore, skills_prompt, team_skills
+from jira_agent.skills import PersonalSkillStore, active_skill_invocation, skills_prompt, team_skills
 from jira_agent.state import FileSink, UploadSink, UserState, user_state
 from jira_agent.tools import ToolContext
 from jira_agent.uploads import prepare_uploads
@@ -75,6 +75,8 @@ JIRA_GUIDANCE = """- Show ticket: jira_get_issue for a known key; use a one-resu
   For searches, assignee=@me uses currentUser() without a separate identity lookup.
 - Before creation, clarify project (jira_list_projects with a query; there can be thousands of projects, so never list all), type (jira_list_issue_types) and required values
   (jira_get_create_fields). Ask for missing values, including for test issues. Do not translate Jira values.
+- If the user specifies the project through an existing issue, read it with jira_get_issue and use
+  its actual project.key. Do not guess the project from the key prefix or ask again when verified.
 - Request tokens only when disconnected, through Connect Jira or Settings → Connections, never in chat."""
 
 SQL_GUIDANCE = """- For tables, describe_table first unless its schema is already known, then run_readonly_sql with
@@ -203,6 +205,8 @@ def prepare(headers: Mapping[str, str], messages: list[dict], conversation_id: s
     user_text = last_user_text(messages)
     tools = available_tools(tool_ctx)
     tool_names = {t.name for t in tools}
+    available_skills = all_skills(state, email, token)
+    skill_request = active_skill_invocation(messages, available_skills)
     instructions = INSTRUCTIONS.format(
         name=agent_name(state, settings),
         tool_names=", ".join(t.name for t in tools),
@@ -212,7 +216,7 @@ def prepare(headers: Mapping[str, str], messages: list[dict], conversation_id: s
              "not connected; direct the user to Connect Jira or Settings → Connections",
         tables="\n".join(f"- {t}" for t in tables) or "(none; enable tables under Settings)",
         uploads=", ".join(f"{u['name']} (id: {u['id']})" for u in uploaded) or "(none)",
-        skills=skills_prompt(all_skills(state, email, token), user_text),
+        skills=skills_prompt(available_skills, skill_request if skill_request is not None else user_text),
     )
     model = build_model(settings["llm_provider"], CFG["llm"], settings, state.creds)
     agent = Agent(name="Jira Agent", instructions=instructions, model=model, tools=build_function_tools(tool_ctx))

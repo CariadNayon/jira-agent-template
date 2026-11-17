@@ -424,7 +424,8 @@ workspace.workspace</pre><button class="btn" type="button" data-copy>Copy</butto
 <h3>Where do I develop?</h3><table><tr><th>File</th><th>Purpose</th></tr>
 <tr><td><code>jira_agent/tools/</code></td><td>New actions; example: <code>example_custom_tool.py</code></td></tr><tr><td><code>tests/</code></td><td>Check behavior without real Jira</td></tr>
 <tr><td><code>jira_agent/config.yaml</code></td><td>Jira URL, model and limits</td></tr><tr><td><code>databricks.yml → variables</code></td><td>App name, secret and warehouse</td></tr></table></section>
-<section class="part" id="skills-guide"><p class="eyebrow">UNDERSTAND</p><h2>What are skills?</h2><p class="lead">A skill is a saved set of instructions for a recurring task. Invoke it in chat with <code>/name</code>.</p>
+<section class="part" id="skills-guide">
+<p class="hint">An explicit <code>/name</code> stays active for related follow-ups in this chat. Type <code>/clear-skill</code> to end it or select another skill to switch.</p><p class="eyebrow">UNDERSTAND</p><h2>What are skills?</h2><p class="lead">A skill is a saved set of instructions for a recurring task. Invoke it in chat with <code>/name</code>.</p>
 <div class="box"><b>Example: weekly report</b><p>Instead of writing the same instructions every week, send <code>/weekly-report last week</code>. The agent receives the saved workflow and your additional request.</p></div>
 <table><tr><th>Term</th><th>Example</th><th>What happens?</th></tr><tr><td>Tool</td><td>Search Jira issues</td><td>Python code calls Jira.</td></tr><tr><td>Skill</td><td>Weekly report</td><td>Instructions define which issues to find and how to summarize them.</td></tr><tr><td>Rule</td><td>Respond in English</td><td>A general preference from Settings applies to the conversation.</td></tr></table>
 <p>A skill does not add technical capabilities or access rights. Jira changes still require approval with <code>yes CODE</code>.</p>

@@ -17,6 +17,8 @@ import json
 import re
 
 from jira_agent.approvals import ActionLedger
+from jira_agent.jira_client import JiraError
+from jira_agent.write_outcome import InputValidationError, observe_writes
 from jira_agent.visual_output import VisualResult
 from jira_agent.tools import REGISTRY, Tool, ToolContext, json_schema, load_tools
 
@@ -60,6 +62,7 @@ def available_tools(tool_ctx: ToolContext) -> list[Tool]:
 def execute(t: Tool, rc: RunContext, args: dict) -> dict | VisualResult:
     """Execute writes once per explicit approval, including across retries/concurrent requests."""
     claimed_code = None
+    writes = []
     try:
         args = dict(args)  # do not mutate callers' arguments when removing the confirmation
         if t.write:
@@ -80,19 +83,26 @@ def execute(t: Tool, rc: RunContext, args: dict) -> dict | VisualResult:
                         "expires_in_seconds": 600,
                         "hinweis": f"Show the user this exact action and ask them to reply with 'yes {code}'. "
                                    "Approval is single-use and valid for 10 minutes."}
-        result = t.func(rc.tool_ctx, **args)
+        with observe_writes() as writes:
+            result = t.func(rc.tool_ctx, **args)
         if claimed_code is not None:
             if "error" in result:
                 result = {**result, "outcome": "unverified", "hinweis": "Check the target system before retrying."}
             rc.actions.finish(claimed_code, result, uncertain="error" in result)
         return result
     except Exception as e:
-        result = {"error": type(e).__name__, "details": str(e)[:300]}
+        result = {"error": "ValueError" if isinstance(e, InputValidationError) else type(e).__name__,
+                  "details": str(e)[:300]}
+        no_change = (isinstance(e, InputValidationError) or isinstance(e, JiraError) and e.no_change) and all(
+            outcome == 'rejected' for outcome in writes)
+        if isinstance(e, JiraError) and e.status_code is not None:
+            result['status_code'] = e.status_code
         if claimed_code is not None:
             # A timeout/error does not prove that the external write failed. Keep the claim consumed.
-            result.update({"outcome": "unverified", "hinweis": "Do not run again automatically. "
-                           "First check the target system to see whether the change was applied."})
-            rc.actions.finish(claimed_code, result, uncertain=True)
+            result.update({"outcome": "not_executed" if no_change else "unverified",
+                           "hinweis": "No change was made. Correct the problem and request a new preview and approval."
+                           if no_change else "Do not run again automatically. First check the target system to see whether the change was applied."})
+            rc.actions.finish(claimed_code, result, uncertain=not no_change, failed=no_change)
         return result
 
 

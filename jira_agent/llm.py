@@ -43,14 +43,15 @@ def check_azure_endpoint(endpoint: str) -> str:
     return endpoint
 
 
-def _azure_model(api_key: str, endpoint: str, api_version: str, deployment: str):
+def _azure_model(api_key: str, endpoint: str, api_version: str, deployment: str, *,
+                 max_retries: int = 2, retry_wait_seconds: float = 30, timeout_seconds: float = 60):
     from agents import OpenAIChatCompletionsModel
-    from openai import AsyncAzureOpenAI
+    from jira_agent.model_client import BoundedAzureClient
     from jira_agent.connections import azure_http_client
 
     http_client = azure_http_client()
-    # Mehr Wiederholungen als Standard (2): bei 429 (Token-Limit pro Minute) wartet das SDK gemäß Retry-After.
-    client = AsyncAzureOpenAI(api_key=api_key, api_version=api_version, azure_endpoint=endpoint, max_retries=6,
+    client = BoundedAzureClient(api_key=api_key, api_version=api_version, azure_endpoint=endpoint,
+                             max_retries=max_retries, retry_wait_seconds=retry_wait_seconds, timeout=timeout_seconds,
                              **({'http_client': http_client} if http_client is not None else {}))
     model = OpenAIChatCompletionsModel(model=deployment, openai_client=client)
     model._jira_agent_client = client  # This factory owns one SDK client per run.
@@ -74,7 +75,7 @@ def central_key(cfg: dict) -> str:
 def _azure_central(cfg: dict, settings: dict, creds: dict):
     return _azure_model(central_key(cfg), cfg["azure_endpoint"],
                         settings.get("azure_api_version") or cfg["api_version"],
-                        settings.get("azure_deployment") or cfg["deployment"])
+                        settings.get("azure_deployment") or cfg["deployment"], **_retry_settings(cfg))
 
 
 @provider("azure_own", "Azure OpenAI (your own key)", needs_own_key=True)
@@ -84,7 +85,13 @@ def _azure_own(cfg: dict, settings: dict, creds: dict):
         raise RuntimeError("Please enter your own Azure key under Settings → Connections.")
     return _azure_model(api_key, check_azure_endpoint(settings.get("azure_endpoint") or cfg["azure_endpoint"]),
                         settings.get("azure_api_version") or cfg["api_version"],
-                        settings.get("azure_deployment") or cfg["deployment"])
+                        settings.get("azure_deployment") or cfg["deployment"], **_retry_settings(cfg))
+
+
+def _retry_settings(cfg: dict) -> dict:
+    return {'max_retries': cfg.get('max_retries', 2),
+            'retry_wait_seconds': cfg.get('retry_wait_seconds', 30),
+            'timeout_seconds': cfg.get('timeout_seconds', 60)}
 
 
 def build_model(name: str, cfg: dict, settings: dict, creds: dict):

@@ -89,11 +89,33 @@ def parse_invocation(text: str) -> tuple[str, str] | None:
     return (m.group(1), m.group(2).strip()) if m else None
 
 
+def active_skill_invocation(messages: list[dict], skills: dict | None = None) -> str | None:
+    """Keep an explicit skill active across user follow-ups, using only this chat's user messages."""
+    latest_user = True
+    for message in reversed(messages):
+        if message.get('role') != 'user':
+            continue
+        content = message.get('content', '')
+        if isinstance(content, list):
+            content = ' '.join(part['text'] for part in content
+                               if isinstance(part, dict) and isinstance(part.get('text'), str))
+        called = parse_invocation(content) if isinstance(content, str) else None
+        if called:
+            if called[0] == 'clear-skill':
+                return ''
+            if skills is not None and called[0] not in skills and LEGACY_TEAM_NAMES.get(called[0]) not in skills:
+                return content if latest_user else ''
+            return content
+        latest_user = False
+    return None
+
+
 def skills_prompt(skills: dict[str, dict], last_user_text: str) -> str:
     """Abschnitt für den System-Prompt: verfügbare Skills und ggf. die Anleitung des aufgerufenen Skills."""
     lines = []
     if skills:
         lines.append("Skills (the user invokes them with /name; suggest relevant ones):")
+        lines.append("An explicitly selected skill stays active for related follow-ups. The current user's corrections or rejection take precedence. /clear-skill ends it; another /name selects a different skill.")
         lines += [f"- /{s['name']}: {s['beschreibung']}" for s in skills.values()]
     called = parse_invocation(last_user_text)
     if called:

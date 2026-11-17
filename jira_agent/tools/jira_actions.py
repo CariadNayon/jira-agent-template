@@ -8,12 +8,13 @@ from __future__ import annotations
 import re
 
 from jira_agent.jira_client import JiraClient
+from jira_agent.write_outcome import InputValidationError
 from jira_agent.tools import ToolContext, tool
 
 
 def _labels(labels: list[str]) -> list[str]:
-    if any(not isinstance(x, str) or not re.fullmatch(r"[A-Za-z0-9_.-]{1,64}", x) for x in labels):
-        raise ValueError("Labels: 1–64 characters, letters, digits, _ - . only.")
+    if not isinstance(labels, list) or any(not isinstance(x, str) or not re.fullmatch(r"[A-Za-z0-9_.-]{1,64}", x) for x in labels):
+        raise InputValidationError("Labels: 1–64 characters, letters, digits, _ - . only.")
     return labels
 
 
@@ -34,11 +35,18 @@ def jira_create_issue(ctx: ToolContext, project: str, summary: str, issue_type: 
     components: component names from create metadata
     labels: labels without spaces
     extra_fields: additional Jira fields in API format from metadata, e.g. customfield_10010 or parent"""
+    if extra_fields is not None and not isinstance(extra_fields, dict):
+        raise InputValidationError('extra_fields must be an object with Jira field IDs.')
+    if not isinstance(assignee, str) or not isinstance(priority, str) or not isinstance(description, str):
+        raise InputValidationError('Assignee, priority and description must be strings.')
+    if components is not None and (not isinstance(components, list) or
+                                  any(not isinstance(c, str) or not c.strip() for c in components)):
+        raise InputValidationError('Components must be a list of component names.')
     fields = dict(extra_fields or {})
     if set(fields) & {"project", "summary", "issuetype", "description", "assignee", "priority", "components", "labels"}:
-        raise ValueError("Provide standard fields through their named parameters, not extra_fields.")
+        raise InputValidationError("Provide standard fields through their named parameters, not extra_fields.")
     if any(not re.fullmatch(r"[A-Za-z][A-Za-z0-9_]*", k) for k in fields):
-        raise ValueError("Invalid field ID.")
+        raise InputValidationError("Invalid field ID.")
     if assignee:
         fields["assignee"] = assignee
     if priority:
@@ -59,12 +67,12 @@ def jira_update_issue(ctx: ToolContext, issue_key: str, fields: dict) -> dict:
 
     issue_key: issue key
     fields: fields in Jira API format, e.g. {"summary":"New summary"} or {"priority":{"name":"High"}}"""
-    if not fields or set(fields) & {"project", "issuetype", "status", "assignee"}:
-        raise ValueError("Fields are missing or include project, issue type, status or assignee. Use the specific tools.")
+    if not isinstance(fields, dict) or not fields or set(fields) & {"project", "issuetype", "status", "assignee"}:
+        raise InputValidationError("Fields are missing or include project, issue type, status or assignee. Use the specific tools.")
     editable = ctx.jira.edit_fields(issue_key)
     unknown = set(fields) - set(editable)
     if unknown:
-        raise ValueError(f"Fields that cannot be edited: {', '.join(sorted(unknown))}")
+        raise InputValidationError(f"Fields that cannot be edited: {', '.join(sorted(unknown))}")
     if "summary" in fields:
         JiraClient.check_text(fields["summary"], "Summary", 255)
     if "labels" in fields:
@@ -105,7 +113,7 @@ def jira_link_issues(ctx: ToolContext, from_key: str, to_key: str, link_type: st
     to_key: target issue (inwardIssue)
     link_type: actual link type name"""
     if JiraClient.check_key(from_key) == JiraClient.check_key(to_key):
-        raise ValueError("An issue cannot be linked to itself.")
+        raise InputValidationError("An issue cannot be linked to itself.")
     ctx.jira.link(from_key, to_key, JiraClient.check_text(link_type, "Link type", 255))
     return {"status": "OK"}
 
