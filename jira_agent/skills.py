@@ -12,7 +12,7 @@ Format (Markdown mit Kopfteil):
 Quellen:
 - Team-Skills: Dateien in skills/ im Repo (für alle Nutzer, kommen per Deploy)
 - Persönliche Skills: im Zahnrad angelegt, gespeichert in /Users/<email>/.jira-agent/skills.json (mit dem
-  Token des Nutzers, nur für ihn). "Für Team vorschlagen" lädt einen Skill als .md herunter.
+  Token des Nutzers, nur für ihn). Teilen: "Publish to catalog" (docs/REGISTRY.md).
 """
 from __future__ import annotations
 

@@ -54,10 +54,10 @@ GRANT MODIFY ON TABLE `ude_dev_we_cariad_t1s_sandbox`.`t1_jira_agent`.`skill_ver
 | Skill | Badge | Farbe | Knöpfe |
 |---|---|---|---|
 | Team-Skill (Repo) | „Team“ | blau | View |
-| Eigener Skill | „Personal“ | grün | Edit, Publish to catalog, Suggest for the team, Delete |
-| Eigener, bereits veröffentlicht | „Personal“ und „Published vN“ | grün + violett | Edit, **Publish new version**, … |
+| Eigener Skill | „Personal“ | grün | Publish to catalog, Edit, Delete |
+| Eigener, bereits veröffentlicht | „Personal“ und „Published vN“ | grün + violett | **Publish new version**, Edit, Delete |
 | Katalog-Skill eines Kollegen | „Catalog vN · name“ (Besitzer ohne `@…`; bei dir selbst „you“) | violett | View |
-| Eigener Skill, Name im Katalog von jemand anderem | „Personal“ und „Name used in catalog by name“ | grün + orange | Edit, … (kein Publish) |
+| Eigener Skill, Name im Katalog von jemand anderem | „Personal“ und „Name used in catalog by name“ | grün + orange | Edit, Delete (kein Publish) |
 
 Der persönliche Skill verdeckt bei dir den Katalogeintrag gleichen Namens; deshalb bleibt er grün und zeigt zusätzlich „Published vN“. Im Chat-Vorschlag beim Tippen von `/` stehen dieselben Hinweise. Die Besitzer-Mailadresse sieht man beim Daraufzeigen (Tooltip). Kollegen sehen neue Versionen spätestens nach 5 Minuten (Zwischenspeicher der Liste); beim Aufruf mit `/name` wird immer die aktuelle Anleitung geladen.
 
@@ -73,7 +73,7 @@ Der persönliche Skill verdeckt bei dir den Katalogeintrag gleichen Namens; desh
 
 ## Grenzen
 
-- **Kein Zurückziehen und kein Löschen** einzelner Versionen. Wer die Tabelle besitzt, kann sie als Ganzes entfernen. Eine Rücknahme-Funktion ist noch nicht gebaut.
+- **Kein Zurückziehen und kein Löschen** einzelner Versionen. Der Knopf **Delete** in den Settings löscht nur die persönliche Kopie im Workspace-Ordner, nie Zeilen im Katalog (die Tabelle ist append-only). Wer die Tabelle besitzt, kann sie als Ganzes entfernen. Eine Rücknahme-Funktion (Version als „withdrawn“ ausblenden) ist noch nicht gebaut.
 - Jeder mit `MODIFY` kann per SQL direkt Zeilen anhängen und dabei Besitzer oder Nummern angeben. `MODIFY` deshalb nur an vertrauenswürdige Veröffentlicher vergeben. Inhalte veröffentlichter Skills gelten als Anweisungen für das Modell: nur prüfen und freigeben, was Nutzern zugemutet werden darf.
 - Versionen eines laufenden Gesprächs werden noch nicht festgehalten; ein Aufruf nutzt jeweils die neueste Version (Plan P4).
 - Agentenprofile, Freigabestatus und Gruppenlisten aus dem Plan sind noch nicht umgesetzt.

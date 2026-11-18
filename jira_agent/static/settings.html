@@ -177,7 +177,6 @@
         if (shared) {
           acts.appendChild(skillButton("View", function () { editSkill(s.name, true); }));
         } else {
-          acts.appendChild(skillButton("Edit", function () { editSkill(s.name, false); }));
           if (reg.enabled && !(pub && !pub.mine)) acts.appendChild(skillButton(pub ? "Publish new version" : "Publish to catalog", async function () {
             if (!confirm("Publish /" + s.name + " to the shared skill catalog?\n\nEveryone with access to the catalog can then use it. " +
                 "A published version cannot be changed or deleted; later changes become a new version.")) return;
@@ -187,13 +186,12 @@
               loadSkills(); notifyPage();
             } catch (e) { msg("skillMsg", e.message, false); }
           }));
-          acts.appendChild(skillButton("Suggest for the team", function () {
-            location.href = "/jira/api/skills/" + encodeURIComponent(s.name) + "/download";
-            msg("skillMsg", "File downloaded. See Guide → Share a skill with your team for the next steps.", true);
-          }));
+          acts.appendChild(skillButton("Edit", function () { editSkill(s.name, false); }));
           acts.appendChild(skillButton("Delete", async function () {
-            if (!confirm("Skill /" + s.name + "? Delete this skill?")) return;
-            try { await api("/jira/api/skills/" + encodeURIComponent(s.name), { method: "DELETE" }); msg("skillMsg", "Deleted.", true); loadSkills(); notifyPage(); }
+            var note = pub ? "\n\nThis removes only your personal copy. The published version" + (pub.mine ? "s stay" : " stays") +
+              " in the shared catalog and cannot be deleted here." : "";
+            if (!confirm("Delete your personal skill /" + s.name + "?" + note)) return;
+            try { await api("/jira/api/skills/" + encodeURIComponent(s.name), { method: "DELETE" }); msg("skillMsg", pub ? "Personal copy deleted. Published versions remain in the catalog." : "Deleted.", true); loadSkills(); notifyPage(); }
             catch (e) { msg("skillMsg", e.message, false); }
           }));
         }

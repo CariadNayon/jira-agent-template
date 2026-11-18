@@ -25,7 +25,7 @@ beschreibung: Wochenbericht meiner Tickets mit Excel-Export
 ## Ablauf
 
 1. **Quelle**:
-   - Angehängte `.md`-Datei (aus „Für Team vorschlagen“ im Zahnrad) → Inhalt übernehmen.
+   - Angehängte `.md`-Datei oder in den Chat kopierter Skill-Text (aus der Skill-Liste im Zahnrad, **View**) → Inhalt übernehmen.
    - Beschreibung in Worten → Skill daraus schreiben (Beispiele: `skills/triage.md`, `skills/wochenreport.md`).
 2. **Prüfen**:
    - Name frei? (`skills/<name>.md` existiert nicht – sonst Nutzer fragen: ersetzen oder neuer Name?)
