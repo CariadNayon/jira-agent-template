@@ -112,6 +112,20 @@ def test_metadata_pagination_required_custom_fields_and_option_bounds():
         jira.create_fields('ABC', '../10001')
 
 
+def test_field_overview_tells_the_model_how_to_write_special_fields():
+    from jira_agent.tools.jira_metadata import summarize_fields
+    meta = [('customfield_11736', {'name': 'Checklist', 'schema': {'type': 'array', 'items': 'checklist-item'}}),
+            ('customfield_10403', {'name': 'Owner', 'schema': {'type': 'user'}}),
+            ('duedate', {'name': 'Due', 'schema': {'type': 'date'}}),
+            ('summary', {'name': 'Summary', 'schema': {'type': 'string'}})]
+    overview = {f['id']: f.get('value_format') for f in summarize_fields(meta, '', '', 0)['fields']}
+    assert '"name"' in overview['customfield_11736'] and 'non-empty' in overview['customfield_11736']
+    assert 'username' in overview['customfield_10403'] and overview['duedate'] == '"YYYY-MM-DD"'
+    assert overview['summary'] is None
+    detail = summarize_fields(meta, 'customfield_11736', '', 0)['fields'][0]
+    assert detail['value_format'] == overview['customfield_11736']
+
+
 def test_jira_permission_failure_is_reported_without_success(monkeypatch):
     jira = FakeJira()
     monkeypatch.setattr(jira, 'request', lambda *a, **kw: FakeResponse(403, {'errorMessages':['No create permission']}))

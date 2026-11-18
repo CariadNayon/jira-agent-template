@@ -4,6 +4,7 @@ from __future__ import annotations
 import os
 import re
 import time
+from datetime import datetime, timezone
 from typing import Mapping
 
 from jira_agent import BUNDLE, CFG
@@ -41,6 +42,7 @@ Jira: {jira}
 Enabled tables (read-only, fully qualified as catalog.schema.table):
 {tables}
 Uploaded files: {uploads}
+Today's date: {today} (UTC). Use it for relative dates such as due dates; never pick dates in the past unless asked.
 
 {skills}
 
@@ -278,6 +280,7 @@ def prepare(headers: Mapping[str, str], messages: list[dict], conversation_id: s
              "not connected; direct the user to Connect Jira or Settings → Connections",
         tables="\n".join(f"- {t}" for t in tables) or "(none; enable tables under Settings)",
         uploads=", ".join(f"{u['name']} (id: {u['id']})" for u in uploaded) or "(none)",
+        today=datetime.now(timezone.utc).strftime("%Y-%m-%d"),
         skills=skills_prompt(available_skills, skill_request if skill_request is not None else user_text),
     )
     model = build_model(settings["llm_provider"], CFG["llm"], settings, state.creds)

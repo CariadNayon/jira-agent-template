@@ -4,20 +4,48 @@ from __future__ import annotations
 from jira_agent.tools import ToolContext, tool
 
 
+def value_format(schema: dict) -> str | None:
+    """Jira REST shape for writing a field, so the model does not guess (e.g. checklist items use "name")."""
+    kind, items = schema.get("type"), schema.get("items")
+    if items == "checklist-item":
+        return '[{"name": "Item text", "checked": false}]; every item needs a non-empty "name"'
+    if kind == "user":
+        return '{"name": "<username from jira_find_user>"}; never the display name'
+    if kind == "date":
+        return '"YYYY-MM-DD"'
+    if kind == "datetime":
+        return '"YYYY-MM-DDThh:mm:ss.000+0000"'
+    if kind == "priority":
+        return '{"name": "<priority name>"}'
+    if kind == "array" and items in ("version", "component"):
+        return '[{"name": "<allowed value name>"}]'
+    if kind == "array" and items == "option":
+        return '[{"value": "<allowed value>"}]'
+    if kind == "option":
+        return '{"value": "<allowed value>"}'
+    if kind == "array" and items == "string":
+        return '["text", ...]'
+    return None
+
+
 def field_summary(field_id: str, meta: dict, value_query: str = "", value_offset: int = 0) -> dict:
     values = meta.get("allowedValues", [])
     if value_query:
         values = [x for x in values if any(value_query.casefold() in str(x.get(k, "")).casefold()
                                          for k in ("id", "name", "value", "key", "displayName"))]
     offset = max(0, value_offset)
-    return {"id": field_id, "name": meta.get("name"), "required": meta.get("required", False),
-            "schema": meta.get("schema", {}), "operations": meta.get("operations", []),
-            "has_default": meta.get("hasDefaultValue", False),
-            "allowed_values": [{k: v for k, v in x.items() if k in
-                                ("id", "name", "value", "key", "displayName")} for x in values[offset:offset + 30]],
-            "allowed_values_total": len(values), "allowed_values_offset": offset,
-            "allowed_values_truncated": len(values) > offset + 30,
-            "autocomplete_url": meta.get("autoCompleteUrl")}
+    summary = {"id": field_id, "name": meta.get("name"), "required": meta.get("required", False),
+               "schema": meta.get("schema", {}), "operations": meta.get("operations", []),
+               "has_default": meta.get("hasDefaultValue", False),
+               "allowed_values": [{k: v for k, v in x.items() if k in
+                                   ("id", "name", "value", "key", "displayName")} for x in values[offset:offset + 30]],
+               "allowed_values_total": len(values), "allowed_values_offset": offset,
+               "allowed_values_truncated": len(values) > offset + 30,
+               "autocomplete_url": meta.get("autoCompleteUrl")}
+    shape = value_format(meta.get("schema") or {})
+    if shape:
+        summary["value_format"] = shape
+    return summary
 
 
 def summarize_fields(fields: list[tuple[str, dict]], field_id: str, value_query: str, value_offset: int) -> dict:
@@ -28,9 +56,11 @@ def summarize_fields(fields: list[tuple[str, dict]], field_id: str, value_query:
         return {"fields": [field_summary(field_id, match, value_query, value_offset)]}
     return {"fields": [{"id": key, "name": meta.get("name"), "required": meta.get("required", False),
                         "schema": meta.get("schema", {}), "has_default": meta.get("hasDefaultValue", False),
-                        "allowed_values_total": len(meta.get("allowedValues", []))}
+                        "allowed_values_total": len(meta.get("allowedValues", [])),
+                        **({"value_format": shape} if (shape := value_format(meta.get("schema") or {})) else {})}
                        for key, meta in fields],
-            "hint": "Call again with field_id for allowed values; search with value_query or paginate with value_offset."}
+            "hint": "Call again with field_id for allowed values; search with value_query or paginate with value_offset. "
+                    "Write values exactly in the value_format shown."}
 
 
 @tool(needs=["jira"])
