@@ -366,16 +366,30 @@
       .catch(function () {});
   }
   function hidePopup() { popup.style.display = "none"; matches = []; }
+  /* Das "/wort" direkt vor dem Cursor: am Textanfang oder nach einem Leerzeichen/Zeilenumbruch (nicht in Pfaden). */
+  function skillToken(ta) {
+    var pos = ta.selectionStart == null ? ta.value.length : ta.selectionStart;
+    var m = /(?:^|\s)\/([a-z0-9-]*)$/.exec(ta.value.slice(0, pos));
+    return m ? { query: m[1], start: pos - m[1].length - 1, end: pos } : null;
+  }
   function choose(i) {
     var ta = textarea(), s = matches[i];
     if (!ta || !s) return;
-    setText(ta, "/" + s.name + " ");
-    hidePopup(); ta.focus();
+    var t = skillToken(ta);
+    if (!t) return hidePopup();
+    var tail = ta.value.slice(t.end);
+    var insert = "/" + s.name + (/^\s/.test(tail) ? "" : " ");
+    var caret = t.start + insert.length + (/^\s/.test(tail) ? 1 : 0);
+    hidePopup();
+    setText(ta, ta.value.slice(0, t.start) + insert + tail);
+    ta.focus();
+    try { ta.setSelectionRange(caret, caret); } catch (e) { /* optional */ }
+    hidePopup();
   }
   function renderPopup(ta) {
-    var m = /^\/([a-z0-9-]*)$/.exec(ta.value);
+    var m = skillToken(ta);
     if (!m || !skills.length) return hidePopup();
-    matches = skills.filter(function (s) { return s.name.indexOf(m[1]) === 0; });
+    matches = skills.filter(function (s) { return s.name.indexOf(m.query) === 0; });
     if (!matches.length) return hidePopup();
     active = Math.min(active, matches.length - 1);
     popup.innerHTML = "";

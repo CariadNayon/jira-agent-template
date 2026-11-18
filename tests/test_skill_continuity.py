@@ -56,6 +56,27 @@ def test_private_skill_cannot_be_loaded_from_another_users_history(prepare):
     assert 'does not exist' in agent.instructions
 
 
+def test_skill_inside_a_message_loads_instructions_and_stays_active_for_followups(prepare):
+    _, build = prepare
+    messages = [{'role': 'user', 'content': 'Please run /demo-cariad for me, thanks'},
+                {'role': 'assistant', 'content': 'Please confirm with yes ABC123.'},
+                {'role': 'user', 'content': 'yes ABC123'}]
+    agent, _ = build(messages)
+    assert 'Title: Demo mit Mathias test ticket.' in agent.instructions
+    assert 'inside their message' in agent.instructions
+    agent, _ = build([{'role': 'user', 'content': 'Look at /tmp/log.txt and /unknown-skill please'}])
+    assert 'Title: Demo mit Mathias test ticket.' not in agent.instructions
+    assert 'does not exist' not in agent.instructions
+
+
+def test_clear_skill_inside_a_message_stops_the_skill(prepare):
+    _, build = prepare
+    agent, _ = build([{'role': 'user', 'content': 'Start /demo-cariad'},
+                      {'role': 'user', 'content': 'Thanks, please /clear-skill now'},
+                      {'role': 'user', 'content': 'Show a ticket.'}])
+    assert 'Title: Demo mit Mathias test ticket.' not in agent.instructions
+
+
 def test_unknown_skill_does_not_keep_repeating_an_error_on_followups(prepare):
     _, build = prepare
     agent, _ = build([{'role': 'user', 'content': '/unknown-skill'},

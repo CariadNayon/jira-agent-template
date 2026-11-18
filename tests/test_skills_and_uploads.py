@@ -6,7 +6,8 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from jira_agent.skills import TEAM_DIR, check_skill, parse_invocation, parse_skill, render_skill, skills_prompt, team_skills
+from jira_agent.skills import (TEAM_DIR, active_skill_invocation, check_skill, find_invocations, parse_invocation,
+                               parse_skill, render_skill, skills_prompt, team_skills)
 from jira_agent.state import UploadSink
 from jira_agent.testing import run_tool
 from jira_agent.tools import load_tools
@@ -40,13 +41,74 @@ def test_skill_format_roundtrip_and_validation():
 def test_invocation_activates_skill_in_prompt():
     skills = {"wochenreport": {"name": "wochenreport", "beschreibung": "Bericht", "anleitung": "SCHRITTE-XYZ"}}
     assert parse_invocation("/wochenreport KW 46") == ("wochenreport", "KW 46")
-    assert parse_invocation("bitte /wochenreport") is None
+    assert parse_invocation("bitte /wochenreport") is None      # parse_invocation kennt nur den Nachrichtenanfang
     assert parse_invocation("/pfad/zu/datei") is None
 
     prompt = skills_prompt(skills, "/wochenreport KW 46")
     assert "- /wochenreport: Bericht" in prompt and "SCHRITTE-XYZ" in prompt and "KW 46" in prompt
     assert "SCHRITTE-XYZ" not in skills_prompt(skills, "Hallo")
     assert "does not exist" in skills_prompt(skills, "/unbekannt")
+
+
+SKILLS = {
+    "triage": {"name": "triage", "beschreibung": "Sortiert", "anleitung": "TRIAGE-STEPS"},
+    "weekly-report": {"name": "weekly-report", "beschreibung": "Bericht", "anleitung": "REPORT-STEPS"},
+}
+
+
+@pytest.mark.parametrize("text", [
+    "Bitte mach das mit /triage für ABC-1",
+    "Mach das und dann /triage.",
+    "Kannst du (/triage) nutzen?",
+    "erste Zeile\n/triage\nzweite Zeile",
+    "Am Ende /triage",
+])
+def test_skill_can_be_invoked_in_the_middle_of_a_message(text):
+    assert [n for n, _, _ in find_invocations(text, SKILLS)] == ["triage"]
+    prompt = skills_prompt(SKILLS, text)
+    assert "TRIAGE-STEPS" in prompt and "REPORT-STEPS" not in prompt
+    assert "inside their message" in prompt and "does not exist" not in prompt
+
+
+@pytest.mark.parametrize("text", [
+    "Öffne /tmp und lies /etc/hosts",
+    "Siehe https://example.com/triage",
+    "pfad/triage und and/or triage/",
+    "Der Ordner `/triage` und a/triage",
+    "Ein /unbekannter-skill mitten im Satz",
+    "triage ohne Schrägstrich",
+])
+def test_paths_urls_and_unknown_names_in_the_middle_are_not_skill_calls(text):
+    assert find_invocations(text, SKILLS) == []
+    assert "TRIAGE-STEPS" not in skills_prompt(SKILLS, text) and "does not exist" not in skills_prompt(SKILLS, text)
+
+
+def test_leading_invocation_keeps_its_behaviour_and_mixes_with_later_ones():
+    assert find_invocations("/triage ABC-1", SKILLS) == [("triage", "ABC-1", True)]
+    assert find_invocations("/unbekannt", SKILLS) == [("unbekannt", "", True)]         # unknown: still explained
+    both = find_invocations("/triage erst, danach /weekly-report", SKILLS)
+    assert both == [("triage", "erst, danach /weekly-report", True), ("weekly-report", "", False)]
+    prompt = skills_prompt(SKILLS, "/triage erst, danach /weekly-report")
+    assert "TRIAGE-STEPS" in prompt and "REPORT-STEPS" in prompt
+    assert find_invocations("/triage und /triage nochmal /triage", SKILLS) == [("triage", "und /triage nochmal /triage", True)]
+    many = {f"skill-{i}": {"name": f"skill-{i}", "beschreibung": "x", "anleitung": "y"} for i in range(6)}
+    assert len(find_invocations("a /skill-1 b /skill-2 c /skill-3 d /skill-4 e /skill-5", many)) == 3
+
+
+def test_legacy_team_names_and_catalog_skills_work_in_the_middle():
+    legacy = {"weekly-report": SKILLS["weekly-report"]}
+    assert "REPORT-STEPS" in skills_prompt(legacy, "mach bitte /wochenreport für KW 46")
+    assert find_invocations("nur /triage", None) == []          # ohne Skill-Liste zählt nur der Anfang
+
+
+def test_mid_message_skill_stays_active_and_can_be_cleared():
+    chat = [{"role": "user", "content": "Bitte /triage für ABC-1"},
+            {"role": "assistant", "content": "Welches Projekt?"},
+            {"role": "user", "content": "ABC"}]
+    kept = active_skill_invocation(chat, SKILLS)
+    assert kept == "Bitte /triage für ABC-1" and "TRIAGE-STEPS" in skills_prompt(SKILLS, kept)
+    assert active_skill_invocation([*chat, {"role": "user", "content": "danke, /clear-skill"}], SKILLS) == ""
+    assert active_skill_invocation([{"role": "user", "content": "ein /unbekannter text"}], SKILLS) is None
 
 
 def test_read_uploaded_files():

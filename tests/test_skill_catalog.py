@@ -370,6 +370,12 @@ def test_instructions_load_only_for_the_invoked_catalog_skill(warehouse):
     assert loaded['sprint-notes']['anleitung'] == SKILL['anleitung'] and loaded['other-skill']['anleitung'] == ''
     prompt = runtime.skills_prompt(loaded, '/sprint-notes now')
     assert 'Search my tickets' in prompt and 'Other steps' not in prompt
+    # The same lazy loading works when the skill is named inside a sentence, through the real request path.
+    text = 'Please use /sprint-notes and /other-skill today.'
+    for name, _, _ in runtime.find_invocations(text, skills):
+        skills = runtime.with_skill_instructions(state, 't', skills, name)
+    mid = runtime.skills_prompt(skills, text)
+    assert 'Search my tickets' in mid and 'Other steps' in mid and 'inside their message' in mid
 
 
 def test_own_and_team_skills_win_over_catalog_and_missing_instructions_are_not_invented(warehouse):

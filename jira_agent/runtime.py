@@ -12,7 +12,7 @@ from jira_agent.data import SqlRunner
 from jira_agent.jira_client import JiraClient
 from jira_agent.llm import build_model
 from jira_agent.settings_store import SettingsStore
-from jira_agent.skills import PersonalSkillStore, active_skill_invocation, parse_invocation, skills_prompt, team_skills
+from jira_agent.skills import PersonalSkillStore, active_skill_invocation, find_invocations, skills_prompt, team_skills
 from jira_agent.state import FileSink, UploadSink, UserState, user_state
 from jira_agent.tools import ToolContext
 from jira_agent.uploads import prepare_uploads
@@ -263,9 +263,8 @@ def prepare(headers: Mapping[str, str], messages: list[dict], conversation_id: s
     tool_names = {t.name for t in tools}
     available_skills = with_catalog_skills(state, token, all_skills(state, email, token))
     skill_request = active_skill_invocation(messages, available_skills)
-    called = parse_invocation(skill_request if skill_request is not None else user_text)
-    if called:
-        available_skills = with_skill_instructions(state, token, available_skills, called[0])
+    for invoked, _, _ in find_invocations(skill_request if skill_request is not None else user_text, available_skills):
+        available_skills = with_skill_instructions(state, token, available_skills, invoked)
     instructions = INSTRUCTIONS.format(
         name=agent_name(state, settings),
         tool_names=", ".join(t.name for t in tools),
