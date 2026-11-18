@@ -49,9 +49,9 @@ resources:
           # Jira-Agent: zentraler Azure-OpenAI-Key und Warehouse (siehe jira_agent/config.yaml)
           - name: AZURE_OPENAI_KEY
             value_from: "secret"
-          # Optional: nach Anlegen des separaten Secrets aktivieren (siehe docs/TOKEN_STORAGE.md).
-          # - name: JIRA_TOKEN_ENCRYPTION_KEY
-          #   value_from: "jira-token-key"
+          # Fernet-Key für gemerkte Jira-Tokens (siehe docs/TOKEN_STORAGE.md).
+          - name: JIRA_TOKEN_ENCRYPTION_KEY
+            value_from: "jira-token-key"
           - name: WAREHOUSE_ID
             value_from: "sql-warehouse"
 
@@ -73,12 +73,12 @@ resources:
             id: ${var.warehouse_id}
             permission: 'CAN_USE'
 
-        # Optional gemeinsam mit JIRA_TOKEN_ENCRYPTION_KEY oben aktivieren.
-        # - name: 'jira-token-key'
-        #   secret:
-        #     scope: ${var.token_encryption_secret_scope}
-        #     key: ${var.token_encryption_secret_key}
-        #     permission: 'READ'
+        # Separater Fernet-Key für gemerkte Jira-Tokens (gehört zu JIRA_TOKEN_ENCRYPTION_KEY oben).
+        - name: 'jira-token-key'
+          secret:
+            scope: ${var.token_encryption_secret_scope}
+            key: ${var.token_encryption_secret_key}
+            permission: 'READ'
 
       # On-behalf-of-user access: SQL, Unity Catalog browsing and the user's settings file in their home folder.
       # "sql" (statt sql:restricted-query) ist nötig, damit Nutzer Skills in den Katalog schreiben können

@@ -17,5 +17,8 @@ env:
   # Jira-Agent: zentraler Azure-OpenAI-Key (Ressource "secret") und Warehouse (Ressource "sql-warehouse")
   - name: AZURE_OPENAI_KEY
     valueFrom: "secret"
+  # Fernet-Key für gemerkte Jira-Tokens (App-Ressource "jira-token-key", siehe docs/TOKEN_STORAGE.md)
+  - name: JIRA_TOKEN_ENCRYPTION_KEY
+    valueFrom: "jira-token-key"
   - name: WAREHOUSE_ID
     valueFrom: "sql-warehouse"
