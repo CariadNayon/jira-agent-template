@@ -17,3 +17,5 @@ def prepare_frontend(frontend: Path) -> None:
     ensure_frontend_details(frontend)
     from scripts.frontend_input import ensure_frontend_input
     ensure_frontend_input(frontend)
+    from scripts.frontend_markdown import ensure_frontend_markdown
+    ensure_frontend_markdown(frontend)
