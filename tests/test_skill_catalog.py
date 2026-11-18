@@ -34,25 +34,35 @@ class FakeWarehouse:
         self.statements.append((statement, p))
         if self.error:
             return self._response(error=self.error)
+
+        def newest(name):
+            same = [r for r in self.rows if r['name'] == name]
+            return max(same, key=lambda r: r['version']) if same else None
+
         if statement.startswith('INSERT'):
-            same = [r for r in self.rows if r['name'] == p['name']]
-            if same and max(same, key=lambda r: r['version'])['owner'] != p['owner']:
+            last = newest(p['name'])
+            if "'withdrawn'" in statement:
+                if not last or last['owner'] != p['owner'] or last['status'] != 'published':
+                    return self._response([['0']])
+                self.rows.append({**last, 'version': last['version'] + 1, 'status': 'withdrawn'})
+                return self._response([['1']])
+            if last and last['owner'] != p['owner']:
                 return self._response([['0']])
-            self.rows.append({'name': p['name'], 'version': max([r['version'] for r in same], default=0) + 1,
+            self.rows.append({'name': p['name'], 'version': (last['version'] if last else 0) + 1, 'status': 'published',
                               'description': p['description'], 'instructions': p['instructions'], 'owner': p['owner']})
             return self._response([['1']])
-        if 'QUALIFY' in statement:
-            latest = {}
-            for r in self.rows:
-                if r['name'] not in latest or r['version'] > latest[r['name']]['version']:
-                    latest[r['name']] = r
+        if 'ROW_NUMBER' in statement:
+            latest = {r['name']: newest(r['name']) for r in self.rows}
             return self._response([[r['name'], str(r['version']), r['description'], r['owner'], '2026-11-17 10:00:00']
-                                   for r in sorted(latest.values(), key=lambda r: r['name'])])
-        matches = [r for r in self.rows if r['name'] == p['name'] and
-                   ('version' not in p or r['version'] == int(p['version']))]
+                                   for r in sorted(latest.values(), key=lambda r: r['name']) if r['status'] == 'published'])
+        if statement.startswith('SELECT version, status, owner'):
+            last = newest(p['name'])
+            return self._response([[str(last['version']), last['status'], last['owner']]] if last else [])
+        matches = [r for r in self.rows if r['name'] == p['name'] and r['status'] == 'published' and
+                   r['version'] == int(p['version'])]
         if not matches:
             return self._response([])
-        r = max(matches, key=lambda r: r['version'])
+        r = matches[0]
         return self._response([[r['name'], str(r['version']), r['description'], r['owner'], '2026-11-17 10:00:00',
                                 r['instructions']]])
 
@@ -254,6 +264,46 @@ def test_personal_skill_with_a_name_owned_by_someone_else_is_flagged(make_client
     assert own['published']['mine'] is False and own['published']['owner_name'] == 'alice'
 
 
+def test_withdraw_hides_the_skill_keeps_history_and_reserves_the_name(warehouse):
+    reg = registry.SkillRegistry(SimpleNamespace(statement_execution=warehouse), 'wh')
+    skill = {'name': 'sprint-notes', **SKILL}
+    reg.publish(skill, ALICE)
+    reg.publish({**skill, 'anleitung': 'second'}, ALICE)
+    with pytest.raises(registry.RegistryError, match='Only alice@example.test can withdraw'):
+        reg.withdraw('sprint-notes', BOB)
+    with pytest.raises(registry.RegistryError, match='not in the catalog'):
+        reg.withdraw('never-published', ALICE)
+    assert reg.withdraw('sprint-notes', ALICE) == {'name': 'sprint-notes', 'version': 3, 'unchanged': False}
+    assert [r['status'] for r in warehouse.rows] == ['published', 'published', 'withdrawn']   # nothing deleted
+    assert reg.list_latest() == [] and reg.get('sprint-notes') is None and reg.get('sprint-notes', 1) is None
+    assert reg.withdraw('sprint-notes', ALICE)['unchanged'] is True and len(warehouse.rows) == 3
+    with pytest.raises(registry.RegistryError, match='already published by alice'):
+        reg.publish({**skill, 'anleitung': 'takeover'}, BOB)
+    again = reg.publish(skill, ALICE)           # the owner can bring it back, as a new version
+    assert again['version'] == 4 and reg.get('sprint-notes')['anleitung'] == SKILL['anleitung']
+    assert [s['name'] for s in reg.list_latest()] == ['sprint-notes']
+
+
+def test_withdraw_through_the_app_for_owner_and_colleague(make_client, warehouse):
+    alice, bob = make_client(ALICE), make_client(BOB)
+    alice.put('/jira/api/skills/sprint-notes', json=SKILL)
+    alice.post('/jira/api/registry/skills/sprint-notes/publish')
+    seen = {s['name']: s for s in bob.get('/jira/api/skills').json()}['sprint-notes']
+    assert seen['mine'] is False
+    denied = bob.post('/jira/api/registry/skills/sprint-notes/withdraw')
+    assert denied.status_code == 409 and 'Only alice' in denied.json()['detail']
+    assert bob.post('/jira/api/registry/skills/BAD NAME/withdraw').status_code == 400
+    done = alice.post('/jira/api/registry/skills/sprint-notes/withdraw')
+    assert done.status_code == 200 and done.json()['withdrawn'] is True
+    mine = {s['name']: s for s in alice.get('/jira/api/skills').json()}['sprint-notes']
+    assert mine['quelle'] == 'persoenlich' and 'published' not in mine     # personal copy remains, no catalog badge
+    user_state(BOB).catalog_skills = None
+    assert 'sprint-notes' not in {s['name'] for s in bob.get('/jira/api/skills').json()}
+    assert bob.get('/jira/api/skills/sprint-notes').status_code == 404
+    assert alice.post('/jira/api/registry/skills/sprint-notes/withdraw').json()['withdrawn'] is False
+    assert alice.post('/jira/api/registry/skills/sprint-notes/publish').json()['version'] == 3   # 1 published, 2 withdrawn
+
+
 def test_endpoints_report_a_disabled_catalog(make_client, monkeypatch):
     monkeypatch.setitem(CFG['registry'], 'enabled', False)
     alice = make_client(ALICE)
@@ -290,7 +340,8 @@ def test_own_and_team_skills_win_over_catalog_and_missing_instructions_are_not_i
     merged = runtime.with_catalog_skills(state, 't', {'triage': {'name': 'triage', 'beschreibung': 'Team',
                                                                 'anleitung': 'team steps', 'quelle': 'team'}})
     assert merged['triage']['quelle'] == 'team'
-    warehouse.rows.append({'name': 'late-skill', 'version': 1, 'description': 'x', 'instructions': 'y', 'owner': ALICE})
+    warehouse.rows.append({'name': 'late-skill', 'version': 1, 'status': 'published', 'description': 'x',
+                           'instructions': 'y', 'owner': ALICE})
     state.catalog_skills = None
     merged = runtime.with_catalog_skills(state, 't', {})
     warehouse.error = '[INSUFFICIENT_PERMISSIONS] now denied'

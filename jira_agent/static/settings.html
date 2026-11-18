@@ -174,8 +174,20 @@
           else if (pub) addBadge("Name used in catalog by " + pub.owner_name, "warn", "This name is already published by " + pub.owner + ". Choose another name to publish.");
         }
         var acts = document.createElement("div"); acts.className = "acts";
+        function withdrawButton() {
+          return skillButton("Withdraw from catalog", async function () {
+            if (!confirm("Withdraw /" + s.name + " from the shared skill catalog?\n\nIt disappears for everyone (colleagues may still see it for a few minutes). " +
+                "The history stays and the name stays reserved for you. You can publish it again later.")) return;
+            try {
+              var w = await api("/jira/api/registry/skills/" + encodeURIComponent(s.name) + "/withdraw", { method: "POST" });
+              msg("skillMsg", w.withdrawn ? "Withdrew /" + s.name + " from the catalog." : "/" + s.name + " was already withdrawn.", true);
+              loadSkills(); notifyPage();
+            } catch (e) { msg("skillMsg", e.message, false); }
+          });
+        }
         if (shared) {
           acts.appendChild(skillButton("View", function () { editSkill(s.name, true); }));
+          if (s.quelle === "katalog" && s.mine) acts.appendChild(withdrawButton());
         } else {
           if (reg.enabled && !(pub && !pub.mine)) acts.appendChild(skillButton(pub ? "Publish new version" : "Publish to catalog", async function () {
             if (!confirm("Publish /" + s.name + " to the shared skill catalog?\n\nEveryone with access to the catalog can then use it. " +
@@ -186,12 +198,13 @@
               loadSkills(); notifyPage();
             } catch (e) { msg("skillMsg", e.message, false); }
           }));
+          if (pub && pub.mine) acts.appendChild(withdrawButton());
           acts.appendChild(skillButton("Edit", function () { editSkill(s.name, false); }));
           acts.appendChild(skillButton("Delete", async function () {
-            var note = pub ? "\n\nThis removes only your personal copy. The published version" + (pub.mine ? "s stay" : " stays") +
-              " in the shared catalog and cannot be deleted here." : "";
+            var note = pub ? "\n\nThis removes only your personal copy. " + (pub.mine ? "The published version stays in the shared catalog; use Withdraw from catalog to hide it."
+              : "The catalog entry belongs to someone else and is not affected.") : "";
             if (!confirm("Delete your personal skill /" + s.name + "?" + note)) return;
-            try { await api("/jira/api/skills/" + encodeURIComponent(s.name), { method: "DELETE" }); msg("skillMsg", pub ? "Personal copy deleted. Published versions remain in the catalog." : "Deleted.", true); loadSkills(); notifyPage(); }
+            try { await api("/jira/api/skills/" + encodeURIComponent(s.name), { method: "DELETE" }); msg("skillMsg", pub ? "Personal copy deleted. The catalog entry is not affected." : "Deleted.", true); loadSkills(); notifyPage(); }
             catch (e) { msg("skillMsg", e.message, false); }
           }));
         }

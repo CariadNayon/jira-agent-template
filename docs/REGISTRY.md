@@ -55,8 +55,8 @@ GRANT MODIFY ON TABLE `ude_dev_we_cariad_t1s_sandbox`.`t1_jira_agent`.`skill_ver
 |---|---|---|---|
 | Team-Skill (Repo) | „Team“ | blau | View |
 | Eigener Skill | „Personal“ | grün | Publish to catalog, Edit, Delete |
-| Eigener, bereits veröffentlicht | „Personal“ und „Published vN“ | grün + violett | **Publish new version**, Edit, Delete |
-| Katalog-Skill eines Kollegen | „Catalog vN · name“ (Besitzer ohne `@…`; bei dir selbst „you“) | violett | View |
+| Eigener, bereits veröffentlicht | „Personal“ und „Published vN“ | grün + violett | **Publish new version**, **Withdraw from catalog**, Edit, Delete |
+| Katalog-Skill eines Kollegen | „Catalog vN · name“ (Besitzer ohne `@…`; bei dir selbst „you“) | violett | View (bei deinen eigenen zusätzlich Withdraw from catalog) |
 | Eigener Skill, Name im Katalog von jemand anderem | „Personal“ und „Name used in catalog by name“ | grün + orange | Edit, Delete (kein Publish) |
 
 Der persönliche Skill verdeckt bei dir den Katalogeintrag gleichen Namens; deshalb bleibt er grün und zeigt zusätzlich „Published vN“. Im Chat-Vorschlag beim Tippen von `/` stehen dieselben Hinweise. Die Besitzer-Mailadresse sieht man beim Daraufzeigen (Tooltip). Kollegen sehen neue Versionen spätestens nach 5 Minuten (Zwischenspeicher der Liste); beim Aufruf mit `/name` wird immer die aktuelle Anleitung geladen.
@@ -73,7 +73,8 @@ Der persönliche Skill verdeckt bei dir den Katalogeintrag gleichen Namens; desh
 
 ## Grenzen
 
-- **Kein Zurückziehen und kein Löschen** einzelner Versionen. Der Knopf **Delete** in den Settings löscht nur die persönliche Kopie im Workspace-Ordner, nie Zeilen im Katalog (die Tabelle ist append-only). Wer die Tabelle besitzt, kann sie als Ganzes entfernen. Eine Rücknahme-Funktion (Version als „withdrawn“ ausblenden) ist noch nicht gebaut.
+- **Zurückziehen statt Löschen:** Der Besitzer kann einen Skill mit **Withdraw from catalog** ausblenden. Dabei wird eine neue Zeile mit Status `withdrawn` angehängt (die Tabelle bleibt append-only, nichts wird gelöscht). Der Skill verschwindet für alle aus der Liste und kann nicht mehr aufgerufen werden; Kollegen sehen die Änderung spätestens nach 5 Minuten. Der Name bleibt für den Besitzer reserviert, er kann den Skill später mit **Publish** als neue Version wieder einstellen. Nur der Besitzer darf zurückziehen. Der Knopf **Delete** löscht dagegen weiterhin nur die persönliche Kopie im Workspace-Ordner.
+- **Kein Löschen** einzelner Versionen im Katalog. Wer die Tabelle besitzt, kann Zeilen oder die ganze Tabelle nur über Unity Catalog entfernen (zum Beispiel DROP TABLE).
 - Jeder mit `MODIFY` kann per SQL direkt Zeilen anhängen und dabei Besitzer oder Nummern angeben. `MODIFY` deshalb nur an vertrauenswürdige Veröffentlicher vergeben. Inhalte veröffentlichter Skills gelten als Anweisungen für das Modell: nur prüfen und freigeben, was Nutzern zugemutet werden darf.
 - Versionen eines laufenden Gesprächs werden noch nicht festgehalten; ein Aufruf nutzt jeweils die neueste Version (Plan P4).
 - Agentenprofile, Freigabestatus und Gruppenlisten aus dem Plan sind noch nicht umgesetzt.

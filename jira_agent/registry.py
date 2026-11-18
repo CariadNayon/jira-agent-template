@@ -181,23 +181,30 @@ class SkillRegistry:
         return {"name": row[0], "version": int(row[1]), "beschreibung": row[2], "owner": row[3],
                 "created_at": row[4], "quelle": "katalog"}
 
+    def _state(self, name: str) -> dict | None:
+        """Newest row of a name, whatever its status; it decides ownership and whether the skill is hidden."""
+        rows = self._run(f"SELECT version, status, owner FROM {self.table} WHERE skill_name = :name "
+                         "ORDER BY version DESC LIMIT 1", [_param("name", name)])
+        return {"version": int(rows[0][0]), "status": rows[0][1], "owner": rows[0][2]} if rows else None
+
     def list_latest(self) -> list[dict]:
+        # A withdrawn skill has a newer 'withdrawn' row, so only names whose newest row is 'published' are listed.
         rows = self._run(
-            f"SELECT skill_name, version, description, owner, CAST(created_at AS STRING) FROM {self.table} "
-            "WHERE status = 'published' "
-            "QUALIFY ROW_NUMBER() OVER (PARTITION BY skill_name ORDER BY version DESC) = 1 "
+            "SELECT skill_name, version, description, owner, CAST(created_at AS STRING) FROM ("
+            f"SELECT *, ROW_NUMBER() OVER (PARTITION BY skill_name ORDER BY version DESC) AS rn FROM {self.table}"
+            ") WHERE rn = 1 AND status = 'published' "
             f"ORDER BY skill_name LIMIT {_LIST_LIMIT}")
         return [self._summary(r) for r in rows]
 
     def get(self, name: str, version: int | None = None) -> dict | None:
-        params = [_param("name", name)]
-        condition = "skill_name = :name AND status = 'published'"
-        if version is not None:
-            condition += " AND version = CAST(:version AS INT)"
-            params.append(_param("version", str(int(version))))
+        state = self._state(name)
+        if not state or state["status"] != "published":
+            return None     # unknown or withdrawn: all of its versions stay hidden
+        params = [_param("name", name), _param("version", str(int(version if version is not None else state["version"])))]
         rows = self._run(
             "SELECT skill_name, version, description, owner, CAST(created_at AS STRING), instructions "
-            f"FROM {self.table} WHERE {condition} ORDER BY version DESC LIMIT 1", params)
+            f"FROM {self.table} WHERE skill_name = :name AND status = 'published' "
+            "AND version = CAST(:version AS INT) LIMIT 1", params)
         if not rows:
             return None
         return {**self._summary(rows[0]), "anleitung": rows[0][5]}
@@ -206,9 +213,10 @@ class SkillRegistry:
         """Append the next version. The first publisher owns the name; others cannot add versions to it."""
         name, description, instructions = skill["name"], skill["beschreibung"], skill["anleitung"]
         digest = content_hash(name, description, instructions)
+        state = self._state(name)
+        if state and state["owner"] != owner:
+            raise RegistryError(f"/{name} is already published by {state['owner']}. Please choose another name.")
         latest = self.get(name)
-        if latest and latest["owner"] != owner:
-            raise RegistryError(f"/{name} is already published by {latest['owner']}. Please choose another name.")
         if latest and content_hash(name, latest["beschreibung"], latest["anleitung"]) == digest:
             return {**latest, "unchanged": True}
         params = [_param("name", name), _param("description", description), _param("instructions", instructions),
@@ -226,3 +234,27 @@ class SkillRegistry:
         if not published or published["owner"] != owner:
             raise RegistryError("The skill was saved, but its version could not be confirmed. Please check the catalog.")
         return published
+
+    def withdraw(self, name: str, owner: str) -> dict:
+        """Hide a skill from everyone by appending a 'withdrawn' row. History stays; only the owner may do this.
+
+        The name stays reserved for its owner, who can publish a new version later.
+        """
+        state = self._state(name)
+        if not state:
+            raise RegistryError(f"/{name} is not in the catalog.")
+        if state["owner"] != owner:
+            raise RegistryError(f"Only {state['owner']} can withdraw /{name} from the catalog.")
+        if state["status"] != "published":
+            return {"name": name, "version": state["version"], "unchanged": True}
+        affected = self._run(
+            f"INSERT INTO {self.table} (skill_name, version, description, instructions, content_sha256, owner, "
+            "created_at, status) "
+            "SELECT skill_name, version + 1, description, instructions, content_sha256, owner, "
+            f"current_timestamp(), 'withdrawn' FROM {self.table} "
+            "WHERE skill_name = :name AND owner = :owner AND status = 'published' "
+            f"AND version = (SELECT MAX(version) FROM {self.table} WHERE skill_name = :name)",
+            [_param("name", name), _param("owner", owner)])
+        if not affected or int(affected[0][0]) < 1:
+            raise RegistryError(f"/{name} could not be withdrawn. Reload the skill list and try again.")
+        return {"name": name, "version": state["version"] + 1, "unchanged": False}

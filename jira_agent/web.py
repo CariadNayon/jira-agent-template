@@ -23,7 +23,7 @@ from jira_agent.runtime import (DEFAULT_SETTINGS, WAREHOUSE_ID, agent_name, all_
                                 default_agent_name, identity, load_catalog_skill, load_personal_skills,
                                 load_settings, user_client)
 from jira_agent.settings_store import SettingsStore, sanitize
-from jira_agent.skills import MAX_PERSONAL, PersonalSkillStore, check_skill, render_skill, team_skills
+from jira_agent.skills import MAX_PERSONAL, NAME_RE, PersonalSkillStore, check_skill, render_skill, team_skills
 from jira_agent.state import UploadSink, get_file, logout, user_state
 from jira_agent.uploads import validate_upload
 from jira_agent.credentials import (JiraTokenStore, cipher, remember_availability, remember_days,
@@ -392,6 +392,24 @@ async def publish_skill(name: str, request: Request, response: Response):
     state.catalog_skills = None
     return {"name": published["name"], "version": published["version"], "owner": published["owner"],
             "unchanged": bool(published.get("unchanged"))}
+
+
+@router.post("/api/registry/skills/{name}/withdraw")
+async def withdraw_skill(name: str, request: Request, response: Response):
+    """Hide a published skill from the catalog (owner only). The table is append-only: history stays."""
+    response.headers['Cache-Control'] = 'private, no-store'
+    email, token = _who(request)
+    if not registry.enabled():
+        raise HTTPException(404, "The skill catalog is not enabled.")
+    if not NAME_RE.fullmatch(name):
+        raise HTTPException(400, "Invalid skill name.")
+    try:
+        reg = registry.SkillRegistry(_client(token), WAREHOUSE_ID)
+        result = await asyncio.to_thread(reg.withdraw, name, email)
+    except registry.RegistryError as e:
+        raise HTTPException(409, str(e)) from None
+    user_state(email).catalog_skills = None
+    return {"name": name, "withdrawn": not result.get("unchanged"), "version": result["version"]}
 
 
 @router.put("/api/skills/{name}")
