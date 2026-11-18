@@ -21,6 +21,7 @@ class FakeWarehouse:
 
     def __init__(self):
         self.rows, self.statements, self.error = [], [], None
+        self.append_only = False
 
     @staticmethod
     def _response(rows=None, error=None):
@@ -39,6 +40,14 @@ class FakeWarehouse:
             same = [r for r in self.rows if r['name'] == name]
             return max(same, key=lambda r: r['version']) if same else None
 
+        if statement.startswith('DELETE'):
+            if self.append_only:
+                return self._response(error="[DELTA_CANNOT_MODIFY_APPEND_ONLY] This table is configured to only allow "
+                                            "appends. If you would like to permit updates or deletes, use 'ALTER TABLE "
+                                            "<table_name> SET TBLPROPERTIES (delta.appendOnly=false)'.")
+            gone = [r for r in self.rows if r['name'] == p['name'] and r['owner'] == p['owner']]
+            self.rows = [r for r in self.rows if r not in gone]
+            return self._response([[str(len(gone))]])
         if statement.startswith('INSERT'):
             last = newest(p['name'])
             if "'withdrawn'" in statement:
@@ -107,13 +116,17 @@ def make_client(monkeypatch, warehouse):
     return make
 
 
-def test_setup_sql_is_append_only_and_quotes_identifiers():
+def test_setup_sql_quotes_identifiers_and_allows_removal():
     ddl = registry.setup_sql('my_catalog', 'my_schema')[0]
     assert '`my_catalog`.`my_schema`.`skill_versions`' in ddl
-    assert 'delta.appendOnly = true' in ddl
+    assert 'appendOnly' not in ddl
+    assert registry.allow_removal_sql('my_catalog', 'my_schema') == (
+        'ALTER TABLE `my_catalog`.`my_schema`.`skill_versions` SET TBLPROPERTIES (delta.appendOnly = false)')
     for bad in ('a.b', 'a`b', "x'; DROP TABLE t; --", ''):
         with pytest.raises(ValueError):
             registry.setup_sql(bad, 'ok')
+        with pytest.raises(ValueError):
+            registry.allow_removal_sql(bad, 'ok')
 
 
 def test_documented_setup_sql_matches_the_code():
@@ -121,6 +134,7 @@ def test_documented_setup_sql_matches_the_code():
     doc = (Path(__file__).resolve().parent.parent / 'docs' / 'REGISTRY.md').read_text(encoding='utf-8')
     block = doc.split('```sql\n', 1)[1].split('\n```', 1)[0]
     assert block == registry.setup_sql(CFG['registry']['catalog'], CFG['registry']['schema'])[0]
+    assert registry.allow_removal_sql(CFG['registry']['catalog'], CFG['registry']['schema']) in doc
 
 
 def test_catalog_is_disabled_by_default_and_ignores_invalid_configuration(monkeypatch):
@@ -264,44 +278,69 @@ def test_personal_skill_with_a_name_owned_by_someone_else_is_flagged(make_client
     assert own['published']['mine'] is False and own['published']['owner_name'] == 'alice'
 
 
-def test_withdraw_hides_the_skill_keeps_history_and_reserves_the_name(warehouse):
+def test_remove_deletes_every_row_and_frees_the_name(warehouse):
     reg = registry.SkillRegistry(SimpleNamespace(statement_execution=warehouse), 'wh')
     skill = {'name': 'sprint-notes', **SKILL}
     reg.publish(skill, ALICE)
     reg.publish({**skill, 'anleitung': 'second'}, ALICE)
-    with pytest.raises(registry.RegistryError, match='Only alice@example.test can withdraw'):
-        reg.withdraw('sprint-notes', BOB)
+    with pytest.raises(registry.RegistryError, match='Only alice@example.test can remove'):
+        reg.remove('sprint-notes', BOB)
     with pytest.raises(registry.RegistryError, match='not in the catalog'):
-        reg.withdraw('never-published', ALICE)
-    assert reg.withdraw('sprint-notes', ALICE) == {'name': 'sprint-notes', 'version': 3, 'unchanged': False}
+        reg.remove('never-published', ALICE)
+    assert len(warehouse.rows) == 2
+    assert reg.remove('sprint-notes', ALICE) == {'name': 'sprint-notes', 'removed': True, 'hidden': False}
+    assert warehouse.rows == [] and reg.list_latest() == [] and reg.get('sprint-notes') is None
+    assert reg.publish(skill, BOB)['version'] == 1     # the name is free again for anyone
+    delete = next(s for s, _ in warehouse.statements if s.startswith('DELETE'))
+    assert 'owner = :owner' in delete and 'skill_name = :name' in delete
+
+
+def test_remove_only_hides_when_the_table_was_created_append_only(warehouse):
+    warehouse.append_only = True
+    reg = registry.SkillRegistry(SimpleNamespace(statement_execution=warehouse), 'wh')
+    skill = {'name': 'sprint-notes', **SKILL}
+    reg.publish(skill, ALICE)
+    reg.publish({**skill, 'anleitung': 'second'}, ALICE)
+    result = reg.remove('sprint-notes', ALICE)
+    assert (result['removed'], result['hidden']) == (False, True)
     assert [r['status'] for r in warehouse.rows] == ['published', 'published', 'withdrawn']   # nothing deleted
     assert reg.list_latest() == [] and reg.get('sprint-notes') is None and reg.get('sprint-notes', 1) is None
-    assert reg.withdraw('sprint-notes', ALICE)['unchanged'] is True and len(warehouse.rows) == 3
+    assert reg.remove('sprint-notes', ALICE)['hidden'] is True and len(warehouse.rows) == 3
     with pytest.raises(registry.RegistryError, match='already published by alice'):
-        reg.publish({**skill, 'anleitung': 'takeover'}, BOB)
-    again = reg.publish(skill, ALICE)           # the owner can bring it back, as a new version
-    assert again['version'] == 4 and reg.get('sprint-notes')['anleitung'] == SKILL['anleitung']
-    assert [s['name'] for s in reg.list_latest()] == ['sprint-notes']
+        reg.publish({**skill, 'anleitung': 'takeover'}, BOB)     # a hidden name stays reserved for its owner
+    again = reg.publish(skill, ALICE)
+    assert again['version'] == 4 and [s['name'] for s in reg.list_latest()] == ['sprint-notes']
 
 
-def test_withdraw_through_the_app_for_owner_and_colleague(make_client, warehouse):
+def test_remove_through_the_app_for_owner_and_colleague(make_client, warehouse):
     alice, bob = make_client(ALICE), make_client(BOB)
     alice.put('/jira/api/skills/sprint-notes', json=SKILL)
     alice.post('/jira/api/registry/skills/sprint-notes/publish')
     seen = {s['name']: s for s in bob.get('/jira/api/skills').json()}['sprint-notes']
     assert seen['mine'] is False
-    denied = bob.post('/jira/api/registry/skills/sprint-notes/withdraw')
+    denied = bob.post('/jira/api/registry/skills/sprint-notes/remove')
     assert denied.status_code == 409 and 'Only alice' in denied.json()['detail']
-    assert bob.post('/jira/api/registry/skills/BAD NAME/withdraw').status_code == 400
-    done = alice.post('/jira/api/registry/skills/sprint-notes/withdraw')
-    assert done.status_code == 200 and done.json()['withdrawn'] is True
+    assert bob.post('/jira/api/registry/skills/BAD NAME/remove').status_code == 400
+    done = alice.post('/jira/api/registry/skills/sprint-notes/remove')
+    assert done.status_code == 200 and done.json() == {'name': 'sprint-notes', 'removed': True, 'hidden': False}
+    assert warehouse.rows == []
     mine = {s['name']: s for s in alice.get('/jira/api/skills').json()}['sprint-notes']
     assert mine['quelle'] == 'persoenlich' and 'published' not in mine     # personal copy remains, no catalog badge
     user_state(BOB).catalog_skills = None
     assert 'sprint-notes' not in {s['name'] for s in bob.get('/jira/api/skills').json()}
     assert bob.get('/jira/api/skills/sprint-notes').status_code == 404
-    assert alice.post('/jira/api/registry/skills/sprint-notes/withdraw').json()['withdrawn'] is False
-    assert alice.post('/jira/api/registry/skills/sprint-notes/publish').json()['version'] == 3   # 1 published, 2 withdrawn
+    assert alice.post('/jira/api/registry/skills/sprint-notes/remove').status_code == 409     # nothing left to remove
+    assert alice.post('/jira/api/registry/skills/sprint-notes/publish').json()['version'] == 1
+
+
+def test_remove_reports_when_it_could_only_hide_the_skill(make_client, warehouse):
+    warehouse.append_only = True
+    alice = make_client(ALICE)
+    alice.put('/jira/api/skills/sprint-notes', json=SKILL)
+    alice.post('/jira/api/registry/skills/sprint-notes/publish')
+    result = alice.post('/jira/api/registry/skills/sprint-notes/remove').json()
+    assert result == {'name': 'sprint-notes', 'removed': False, 'hidden': True}
+    assert [r['status'] for r in warehouse.rows] == ['published', 'withdrawn']
 
 
 def test_endpoints_report_a_disabled_catalog(make_client, monkeypatch):

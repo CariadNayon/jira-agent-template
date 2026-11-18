@@ -1,8 +1,8 @@
 # Gemeinsamer Skill-Katalog (Unity Catalog)
 
-Nutzer können eigene Skills als **unveränderliche, nummerierte Versionen** in einem gemeinsamen Unity-Catalog-Schema veröffentlichen. Andere Nutzer sehen sie in der Skill-Liste (Badge „Catalog vN“) und rufen sie wie Team-Skills mit `/name` auf. Das ist Teil P5 des [Umsetzungsplans](IMPLEMENTATION_PLAN.md).
+Nutzer können eigene Skills als **nummerierte Versionen** in einem gemeinsamen Unity-Catalog-Schema veröffentlichen und später wieder **entfernen**. Andere Nutzer sehen sie in der Skill-Liste (Badge „Catalog vN“) und rufen sie wie Team-Skills mit `/name` auf. Das ist Teil P5 des [Umsetzungsplans](IMPLEMENTATION_PLAN.md).
 
-**Stand:** Der Code ist umgesetzt und mit einem simulierten Warehouse getestet. Das SQL wurde **noch nicht gegen ein echtes Warehouse ausgeführt**, und die Tabelle existiert noch nicht. Die Funktion ist deshalb standardmäßig ausgeschaltet (`registry.enabled: false`).
+**Stand:** Der Code ist umgesetzt und mit einem simulierten Warehouse getestet. Die Tabelle `skill_versions` existiert im Schema und `registry.enabled` steht auf `true`. Veröffentlicht und angezeigt wird mit echtem SQL; **das Entfernen** (`DELETE`) und das Ausblenden wurden noch nicht gegen das echte Warehouse geprüft.
 
 ## Ort
 
@@ -10,7 +10,7 @@ Nutzer können eigene Skills als **unveränderliche, nummerierte Versionen** in 
 
 ```yaml
 registry:
-  enabled: false
+  enabled: true
   catalog: ude_dev_we_cariad_t1s_sandbox
   schema: t1_jira_agent
 ```
@@ -21,7 +21,7 @@ Die Tabelle heißt `skill_versions`. Katalog und Schema dürfen nur Buchstaben, 
 
 Zum Zeitpunkt dieser Dokumentation ist das Schema `ude_dev_we_cariad_t1s_sandbox.t1_jira_agent` leer. Schreibrechte haben dort nur ausgewählte Gruppen und Personen (zum Beispiel `CARIAD.mdb-reporter.developers`). Wer die Tabelle anlegt, braucht `CREATE TABLE` auf dem Schema.
 
-1. Tabelle anlegen. Sie ist **append-only**: Delta lehnt `UPDATE` und `DELETE` ab, eine veröffentlichte Version bleibt also unverändert.
+1. Tabelle anlegen. Die App hängt nur Versionen an und ändert veröffentlichte Zeilen nie. Löschen muss aber möglich sein, damit Besitzer ihre Skills wieder entfernen können; deshalb **nicht** `delta.appendOnly = true` setzen.
 
 ```sql
 CREATE TABLE IF NOT EXISTS `ude_dev_we_cariad_t1s_sandbox`.`t1_jira_agent`.`skill_versions` (
@@ -33,7 +33,13 @@ CREATE TABLE IF NOT EXISTS `ude_dev_we_cariad_t1s_sandbox`.`t1_jira_agent`.`skil
   owner STRING NOT NULL,
   created_at TIMESTAMP NOT NULL,
   status STRING NOT NULL
-) TBLPROPERTIES (delta.appendOnly = true)
+)
+```
+
+   **Tabelle bereits mit `delta.appendOnly = true` angelegt** (die erste Version dieser Anleitung tat das)? Dann kann **Remove from catalog** Zeilen nicht löschen und blendet den Skill nur aus. Der Besitzer der Tabelle schaltet das einmal um:
+
+```sql
+ALTER TABLE `ude_dev_we_cariad_t1s_sandbox`.`t1_jira_agent`.`skill_versions` SET TBLPROPERTIES (delta.appendOnly = false)
 ```
 
 2. Rechte vergeben. Wer lesen darf, entscheidet **Unity Catalog**, nicht die Oberfläche. Gruppen anpassen:
@@ -55,8 +61,8 @@ GRANT MODIFY ON TABLE `ude_dev_we_cariad_t1s_sandbox`.`t1_jira_agent`.`skill_ver
 |---|---|---|---|
 | Team-Skill (Repo) | „Team“ | blau | View |
 | Eigener Skill | „Personal“ | grün | Publish to catalog, Edit, Delete |
-| Eigener, bereits veröffentlicht | „Personal“ und „Published vN“ | grün + violett | **Publish new version**, **Withdraw from catalog**, Edit, Delete |
-| Katalog-Skill eines Kollegen | „Catalog vN · name“ (Besitzer ohne `@…`; bei dir selbst „you“) | violett | View (bei deinen eigenen zusätzlich Withdraw from catalog) |
+| Eigener, bereits veröffentlicht | „Personal“ und „Published vN“ | grün + violett | **Publish new version**, **Remove from catalog**, Edit, Delete |
+| Katalog-Skill eines Kollegen | „Catalog vN · name“ (Besitzer ohne `@…`; bei dir selbst „you“) | violett | View (bei deinen eigenen zusätzlich Remove from catalog) |
 | Eigener Skill, Name im Katalog von jemand anderem | „Personal“ und „Name used in catalog by name“ | grün + orange | Edit, Delete (kein Publish) |
 
 Der persönliche Skill verdeckt bei dir den Katalogeintrag gleichen Namens; deshalb bleibt er grün und zeigt zusätzlich „Published vN“. Im Chat-Vorschlag beim Tippen von `/` stehen dieselben Hinweise. Die Besitzer-Mailadresse sieht man beim Daraufzeigen (Tooltip). Kollegen sehen neue Versionen spätestens nach 5 Minuten (Zwischenspeicher der Liste); beim Aufruf mit `/name` wird immer die aktuelle Anleitung geladen.
@@ -73,9 +79,9 @@ Der persönliche Skill verdeckt bei dir den Katalogeintrag gleichen Namens; desh
 
 ## Grenzen
 
-- **Zurückziehen statt Löschen:** Der Besitzer kann einen Skill mit **Withdraw from catalog** ausblenden. Dabei wird eine neue Zeile mit Status `withdrawn` angehängt (die Tabelle bleibt append-only, nichts wird gelöscht). Der Skill verschwindet für alle aus der Liste und kann nicht mehr aufgerufen werden; Kollegen sehen die Änderung spätestens nach 5 Minuten. Der Name bleibt für den Besitzer reserviert, er kann den Skill später mit **Publish** als neue Version wieder einstellen. Nur der Besitzer darf zurückziehen. Der Knopf **Delete** löscht dagegen weiterhin nur die persönliche Kopie im Workspace-Ordner.
-- **Kein Löschen** einzelner Versionen im Katalog. Wer die Tabelle besitzt, kann Zeilen oder die ganze Tabelle nur über Unity Catalog entfernen (zum Beispiel DROP TABLE).
-- Jeder mit `MODIFY` kann per SQL direkt Zeilen anhängen und dabei Besitzer oder Nummern angeben. `MODIFY` deshalb nur an vertrauenswürdige Veröffentlicher vergeben. Inhalte veröffentlichter Skills gelten als Anweisungen für das Modell: nur prüfen und freigeben, was Nutzern zugemutet werden darf.
+- **Entfernen:** Der Besitzer kann einen Skill mit **Remove from catalog** endgültig entfernen. Die App löscht dabei alle Zeilen dieses Namens, die ihm gehören (`DELETE … WHERE skill_name = :name AND owner = :owner`). Der Skill verschwindet für alle (Kollegen sehen die Änderung spätestens nach 5 Minuten), seine Versionen sind weg, und der Name ist wieder frei. Nur der Besitzer darf entfernen. Der Knopf **Delete** löscht dagegen nur die persönliche Kopie im Workspace-Ordner und lässt den Katalog unberührt.
+- **Append-only-Tabelle:** Ist die Tabelle noch mit `delta.appendOnly = true` angelegt, lehnt Delta das Löschen ab. Die App blendet den Skill dann nur aus (neue Zeile mit Status `withdrawn`; der Name bleibt für den Besitzer reserviert) und sagt das in der Meldung. Mit dem `ALTER TABLE` aus der Einrichtung geht echtes Entfernen.
+- Die Tabelle selbst schützt nicht mehr vor Änderungen: Die App ändert veröffentlichte Zeilen nie, aber jeder mit `MODIFY` kann per SQL direkt Zeilen anhängen, ändern oder löschen, auch von anderen Besitzern, und dabei Besitzer oder Nummern frei wählen. Die Besitzprüfung der App gilt nur für Aktionen über die App. `MODIFY` deshalb nur an vertrauenswürdige Veröffentlicher vergeben. Inhalte veröffentlichter Skills gelten als Anweisungen für das Modell: nur prüfen und freigeben, was Nutzern zugemutet werden darf.
 - Versionen eines laufenden Gesprächs werden noch nicht festgehalten; ein Aufruf nutzt jeweils die neueste Version (Plan P4).
 - Agentenprofile, Freigabestatus und Gruppenlisten aus dem Plan sind noch nicht umgesetzt.
 

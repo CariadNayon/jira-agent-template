@@ -371,7 +371,7 @@ async def registry_status(request: Request, response: Response):
 
 @router.post("/api/registry/skills/{name}/publish")
 async def publish_skill(name: str, request: Request, response: Response):
-    """Publish a personal skill as the next immutable catalog version. Needs MODIFY on the catalog table."""
+    """Publish a personal skill as the next catalog version (published versions are never edited). Needs MODIFY."""
     response.headers['Cache-Control'] = 'private, no-store'
     email, token = _who(request)
     if not registry.enabled():
@@ -394,9 +394,9 @@ async def publish_skill(name: str, request: Request, response: Response):
             "unchanged": bool(published.get("unchanged"))}
 
 
-@router.post("/api/registry/skills/{name}/withdraw")
-async def withdraw_skill(name: str, request: Request, response: Response):
-    """Hide a published skill from the catalog (owner only). The table is append-only: history stays."""
+@router.post("/api/registry/skills/{name}/remove")
+async def remove_skill(name: str, request: Request, response: Response):
+    """Remove a published skill from the catalog (owner only). Hides it only if the table is append-only."""
     response.headers['Cache-Control'] = 'private, no-store'
     email, token = _who(request)
     if not registry.enabled():
@@ -405,11 +405,11 @@ async def withdraw_skill(name: str, request: Request, response: Response):
         raise HTTPException(400, "Invalid skill name.")
     try:
         reg = registry.SkillRegistry(_client(token), WAREHOUSE_ID)
-        result = await asyncio.to_thread(reg.withdraw, name, email)
+        result = await asyncio.to_thread(reg.remove, name, email)
     except registry.RegistryError as e:
         raise HTTPException(409, str(e)) from None
     user_state(email).catalog_skills = None
-    return {"name": name, "withdrawn": not result.get("unchanged"), "version": result["version"]}
+    return {"name": name, "removed": bool(result.get("removed")), "hidden": bool(result.get("hidden"))}
 
 
 @router.put("/api/skills/{name}")

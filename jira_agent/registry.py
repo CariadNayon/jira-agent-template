@@ -1,9 +1,11 @@
-"""Shared skill catalog in Unity Catalog: published skills as immutable, numbered versions.
+"""Shared skill catalog in Unity Catalog: published skills as numbered versions.
 
 Everything runs with the permissions of the signed-in user (their workspace token). The table is created once by
-an administrator (see docs/REGISTRY.md) as an append-only Delta table: published rows can be added but never changed
-or deleted, so a published version stays exactly as it was reviewed. Who may read or publish is decided by Unity
-Catalog grants (SELECT / MODIFY), not by the UI.
+an administrator (see docs/REGISTRY.md). The app only ever appends versions (it never edits a published row), so a
+published version stays exactly as it was reviewed. The owner of a skill can remove it again: the rows are deleted
+when the table allows deletes; a table that was created append-only only hides the skill (a 'withdrawn' row) until
+its owner switches that property off. Who may read or publish is decided by Unity Catalog grants (SELECT / MODIFY),
+not by the UI.
 
 The model has no access to this module. Writes use a fixed, parameterized statement; user input is never
 concatenated into SQL. Catalog and schema come from the configuration and are validated as plain identifiers.
@@ -27,6 +29,10 @@ _WAIT_SECONDS = 60
 
 class RegistryError(Exception):
     """A problem that can be explained to the user (not set up, no permission, conflict)."""
+
+
+class AppendOnlyError(RegistryError):
+    """The table was created with delta.appendOnly = true, so rows cannot be deleted."""
 
 
 # Unity Catalog names the missing privilege, e.g. "does not have USE CATALOG on Catalog 'main'". Only privilege,
@@ -82,7 +88,7 @@ def table_name(catalog: str, schema: str) -> str:
 
 
 def setup_sql(catalog: str, schema: str) -> list[str]:
-    """DDL for the one-time administrator setup. Append-only: UPDATE and DELETE are rejected by Delta."""
+    """DDL for the one-time administrator setup. Rows can be deleted, so owners can remove their skills."""
     return [
         f"CREATE TABLE IF NOT EXISTS {table_name(catalog, schema)} (\n"
         "  skill_name STRING NOT NULL,\n"
@@ -93,8 +99,13 @@ def setup_sql(catalog: str, schema: str) -> list[str]:
         "  owner STRING NOT NULL,\n"
         "  created_at TIMESTAMP NOT NULL,\n"
         "  status STRING NOT NULL\n"
-        ") TBLPROPERTIES (delta.appendOnly = true)",
+        ")",
     ]
+
+
+def allow_removal_sql(catalog: str, schema: str) -> str:
+    """For a table that was created append-only: allow deleting rows so that skills can be removed for good."""
+    return f"ALTER TABLE {table_name(catalog, schema)} SET TBLPROPERTIES (delta.appendOnly = false)"
 
 
 def content_hash(name: str, description: str, instructions: str) -> str:
@@ -150,6 +161,8 @@ class SkillRegistry:
                                     "(docs/REGISTRY.md).")
             if "read-only session" in lowered:
                 raise RegistryError(READ_ONLY_MESSAGE)
+            if "delta_cannot_modify_append_only" in lowered or "only allow appends" in lowered:
+                raise AppendOnlyError("The catalog table only allows appends.")
             missing = missing_privileges(message)
             if missing:
                 raise RegistryError(_permission_message(missing))
@@ -258,3 +271,24 @@ class SkillRegistry:
         if not affected or int(affected[0][0]) < 1:
             raise RegistryError(f"/{name} could not be withdrawn. Reload the skill list and try again.")
         return {"name": name, "version": state["version"] + 1, "unchanged": False}
+
+    def remove(self, name: str, owner: str) -> dict:
+        """Remove a skill for good (owner only): delete all of its rows.
+
+        If the table was created append-only, the rows cannot be deleted; the skill is then only hidden
+        (see withdraw) and the result says so, so the table owner can allow deletes (allow_removal_sql).
+        """
+        state = self._state(name)
+        if not state:
+            raise RegistryError(f"/{name} is not in the catalog.")
+        if state["owner"] != owner:
+            raise RegistryError(f"Only {state['owner']} can remove /{name} from the catalog.")
+        try:
+            affected = self._run(f"DELETE FROM {self.table} WHERE skill_name = :name AND owner = :owner",
+                                 [_param("name", name), _param("owner", owner)])
+        except AppendOnlyError:
+            _log.warning("Skill catalog table is append-only; hiding /%s instead of deleting it", name)
+            return {**self.withdraw(name, owner), "removed": False, "hidden": True}
+        if not affected or int(affected[0][0]) < 1:
+            raise RegistryError(f"/{name} could not be removed. Reload the skill list and try again.")
+        return {"name": name, "removed": True, "hidden": False}
