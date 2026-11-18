@@ -29,6 +29,41 @@ class RegistryError(Exception):
     """A problem that can be explained to the user (not set up, no permission, conflict)."""
 
 
+# Unity Catalog names the missing privilege, e.g. "does not have USE CATALOG on Catalog 'main'". Only privilege,
+# object type and object name are shown to the user, and only if they match these fixed patterns.
+_MISSING = re.compile(r"does not have ([A-Z][A-Z _]{1,40}?) (?:privilege )?on "
+                      r"(catalog|schema|table|view|volume|function) '([A-Za-z0-9_.`-]{1,300})'", re.I)
+_PRIVILEGES = {"USE CATALOG", "USE SCHEMA", "SELECT", "MODIFY", "CREATE TABLE", "READ VOLUME", "EXECUTE",
+               "BROWSE", "MANAGE", "ALL PRIVILEGES"}
+_WHO = {"catalog": "the owner of the catalog or someone with MANAGE on it",
+        "schema": "the owner of the schema or someone with MANAGE on it"}
+
+
+def missing_privileges(message: str) -> list[tuple[str, str, str]]:
+    """[(privilege, object type, object name)] from a Unity Catalog error message, without duplicates."""
+    found = []
+    for priv, kind, name in _MISSING.findall(message or ""):
+        priv = " ".join(priv.replace("_", " ").upper().split())
+        item = (priv, kind.lower(), name.replace("`", ""))
+        if priv in _PRIVILEGES and item not in found:
+            found.append(item)
+    return found
+
+
+def _permission_message(missing: list[tuple[str, str, str]]) -> str:
+    parts = [f"{priv} on {kind} {name}" for priv, kind, name in missing]
+    kind = missing[0][1]
+    return ("You are missing " + "; ".join(parts) + ". Ask "
+            + _WHO.get(kind, "the owner of the skill catalog table or someone with MANAGE on its schema")
+            + " to grant it.")
+
+
+READ_ONLY_MESSAGE = ("Your sign-in to this app only allows reading, so the skill cannot be published. Sign out, open "
+                     "the app in a new browser window and accept the requested permissions again.")
+SIGN_IN_MESSAGE = ("Your sign-in to this app is missing permissions. Sign out, open the app in a new browser "
+                   "window and accept the requested permissions again.")
+
+
 def settings() -> dict:
     cfg = dict(CFG.get("registry") or {})
     return {"enabled": bool(cfg.get("enabled")), "catalog": str(cfg.get("catalog") or ""),
@@ -85,8 +120,12 @@ class SkillRegistry:
 
         items = [StatementParameterListItem(**p) for p in parameters or []]
         api = self.w.statement_execution
-        resp = api.execute_statement(statement=statement, warehouse_id=self.warehouse_id, parameters=items or None,
-                                     wait_timeout="30s", row_limit=_LIST_LIMIT)
+        try:
+            resp = api.execute_statement(statement=statement, warehouse_id=self.warehouse_id,
+                                         parameters=items or None, wait_timeout="30s", row_limit=_LIST_LIMIT)
+        except Exception as exc:
+            self._raise_api_error(exc)
+            raise
         deadline = time.monotonic() + _WAIT_SECONDS
         while resp.status.state in (StatementState.PENDING, StatementState.RUNNING):
             if time.monotonic() >= deadline:
@@ -109,11 +148,33 @@ class SkillRegistry:
             if "table_or_view_not_found" in lowered or "cannot be found" in lowered:
                 raise RegistryError("The skill catalog is not set up yet. An administrator must create the table "
                                     "(docs/REGISTRY.md).")
+            if "read-only session" in lowered:
+                raise RegistryError(READ_ONLY_MESSAGE)
+            missing = missing_privileges(message)
+            if missing:
+                raise RegistryError(_permission_message(missing))
             if "permission" in lowered or "privilege" in lowered or "denied" in lowered:
                 raise RegistryError("You do not have access to the skill catalog. Ask an administrator for "
                                     "SELECT (read) or MODIFY (publish) on it.")
             raise RegistryError("The skill catalog request failed" + (f" ({code})." if code else "."))
         return list((resp.result.data_array if resp.result else None) or [])
+
+    def _raise_api_error(self, exc: Exception) -> None:
+        """Errors before the statement runs (HTTP 401/403): missing warehouse access or a too narrow sign-in."""
+        from databricks.sdk.errors import PermissionDenied, Unauthenticated
+
+        if not isinstance(exc, (PermissionDenied, Unauthenticated)):
+            return
+        message = str(exc)
+        _log.warning("Skill catalog request rejected: %s %s", type(exc).__name__, message[:500].replace("\n", " "))
+        lowered = message.lower()
+        if "scope" in lowered or isinstance(exc, Unauthenticated):
+            raise RegistryError(SIGN_IN_MESSAGE) from None
+        missing = missing_privileges(message)
+        if missing:
+            raise RegistryError(_permission_message(missing)) from None
+        raise RegistryError(f"You are missing CAN USE on the SQL warehouse {self.warehouse_id}. Ask the owner of "
+                            "the warehouse to grant it.") from None
 
     @staticmethod
     def _summary(row: list) -> dict:

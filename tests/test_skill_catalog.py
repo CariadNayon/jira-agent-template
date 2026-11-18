@@ -158,6 +158,55 @@ def test_failures_are_explained_without_leaking_details(warehouse):
     assert 'internal detail' not in str(other.value)
 
 
+@pytest.mark.parametrize('error, expected', [
+    ("[INSUFFICIENT_PERMISSIONS] Insufficient privileges:\nPrincipal 'Doe, Jane' does not have USE CATALOG on "
+     "Catalog 'ude_dev_we_cariad_t1s_sandbox'. SQLSTATE: 42501",
+     'You are missing USE CATALOG on catalog ude_dev_we_cariad_t1s_sandbox. Ask the owner of the catalog'),
+    ("[INSUFFICIENT_PERMISSIONS] Insufficient privileges:\nUser does not have USE SCHEMA on Schema "
+     "'cat.t1_jira_agent'.", 'You are missing USE SCHEMA on schema cat.t1_jira_agent. Ask the owner of the schema'),
+    ("[INSUFFICIENT_PERMISSIONS] User does not have MODIFY on Table 'cat.s.skill_versions'. User does not have "
+     "MODIFY on Table 'cat.s.skill_versions'.",
+     'You are missing MODIFY on table cat.s.skill_versions. Ask the owner of the skill catalog table'),
+    ('ModifyTable is not supported in read-only session mode.', 'only allows reading'),
+])
+def test_permission_failures_name_exactly_what_is_missing(warehouse, error, expected):
+    reg = registry.SkillRegistry(SimpleNamespace(statement_execution=warehouse), 'wh')
+    warehouse.error = error
+    with pytest.raises(registry.RegistryError) as exc:
+        reg.publish({'name': 'sprint-notes', **SKILL}, ALICE)
+    assert expected in str(exc.value)
+    assert 'Doe' not in str(exc.value) and 'SQLSTATE' not in str(exc.value)
+
+
+def test_unknown_privileges_and_odd_names_are_not_echoed():
+    assert registry.missing_privileges("does not have DROP EVERYTHING on Table 'a.b.c'") == []
+    assert registry.missing_privileges("does not have SELECT on Table 'a.b; <script>'") == []
+    assert registry.missing_privileges("does not have SELECT on Table 'a.b.c'") == [('SELECT', 'table', 'a.b.c')]
+
+
+def test_rejected_requests_explain_warehouse_and_sign_in_problems(warehouse):
+    from databricks.sdk.errors import PermissionDenied, Unauthenticated
+
+    class Rejecting:
+        def __init__(self, exc):
+            self.exc = exc
+
+        def execute_statement(self, **kwargs):
+            raise self.exc
+
+    def reg(exc):
+        return registry.SkillRegistry(SimpleNamespace(statement_execution=Rejecting(exc)), 'wh-123')
+
+    with pytest.raises(registry.RegistryError, match='CAN USE on the SQL warehouse wh-123'):
+        reg(PermissionDenied('You are not authorized to use this warehouse')).list_latest()
+    with pytest.raises(registry.RegistryError, match='sign-in to this app is missing permissions'):
+        reg(PermissionDenied('Provided OAuth token does not have required scopes: sql')).list_latest()
+    with pytest.raises(registry.RegistryError, match='sign-in'):
+        reg(Unauthenticated('Invalid token')).list_latest()
+    with pytest.raises(ValueError):
+        reg(ValueError('other errors are not hidden')).list_latest()
+
+
 def test_publish_and_use_through_the_app(make_client, warehouse):
     alice, bob = make_client(ALICE), make_client(BOB)
     assert alice.put('/jira/api/skills/sprint-notes', json=SKILL).status_code == 200
