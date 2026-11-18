@@ -30,6 +30,19 @@ def test_same_approval_across_requests_creates_one_ticket_and_returns_receipt():
     assert len(jira.issues) == 1
 
 
+def test_typed_code_is_used_when_the_model_omits_it_in_the_call():
+    ledger = ActionLedger()
+    rc = context(ledger)
+    t = load_tools()['jira_create_issue']
+    code = execute(t, rc, ARGS)['code']
+    rc.last_user_text = f'yes {code}'
+    assert execute(t, rc, ARGS)['key'] == 'ABC-1'
+    other = {**ARGS, 'summary': 'Other'}
+    rc.last_user_text = f'yes {code}'
+    assert execute(t, rc, other)['status'] == 'BESTAETIGUNG_NOETIG'
+    assert len(rc.tool_ctx.jira.issues) == 1
+
+
 def test_intentional_repeat_needs_new_proposal_and_new_confirmation():
     ledger = ActionLedger()
     rc = context(ledger)

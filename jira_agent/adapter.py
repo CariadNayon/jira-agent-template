@@ -69,6 +69,9 @@ def execute(t: Tool, rc: RunContext, args: dict) -> dict | VisualResult:
             given = str(args.pop("confirmation_code", "") or "").upper()
             fingerprint = rc.fingerprint(t.name, args)
             approval = re.fullmatch(r"\s*(?:yes|ja)\s+([A-F0-9]{6})\s*[.!]?\s*", rc.last_user_text, re.I)
+            if approval and not given:
+                # Models sometimes repeat the call without the code; the typed code is still bound to these exact arguments.
+                given = approval.group(1).upper()
             if approval and given == approval.group(1).upper():
                 claimed, receipt = rc.actions.claim(given, fingerprint)
                 if receipt is not None:
