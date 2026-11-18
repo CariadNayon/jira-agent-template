@@ -212,6 +212,10 @@ class JiraClient:
 
     def update_fields(self, issue_key: str, **fields) -> None:
         """Felder setzen, z. B. update_fields("ABC-1", summary="Neu", customfield_10010="x")."""
+        if isinstance(fields.get("components"), list):
+            fields["components"] = [{"name": c} if isinstance(c, str) else c for c in fields["components"]]
+        if isinstance(fields.get("priority"), str):
+            fields["priority"] = {"name": fields["priority"]}
         self._call("PUT", f"/issue/{self.check_key(issue_key)}", json={"fields": fields})
 
     def set_priority(self, issue_key: str, priority: str) -> None:
