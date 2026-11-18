@@ -69,6 +69,15 @@
     '#jira-toast{position:fixed;bottom:110px;left:50%;transform:translateX(-50%);z-index:2147483002;padding:8px 14px;border-radius:8px;' +
       'background:#222;color:#fff;font-size:13px;display:none;max-width:90vw}',
     'form.jira-drop{outline:2px dashed #1b5fd1;outline-offset:4px}',
+    '#jira-chips{display:flex;flex-wrap:wrap;gap:8px;padding:10px 12px 0}',
+    '#jira-chips .chip{display:flex;align-items:center;gap:8px;max-width:240px;padding:4px 6px 4px 4px;border-radius:10px;' +
+      'background:rgba(128,128,128,.12);font-size:12px}',
+    '#jira-chips .chip img{width:40px;height:40px;object-fit:cover;border-radius:6px;display:block}',
+    '#jira-chips .chip .ico{width:40px;height:40px;border-radius:6px;display:flex;align-items:center;justify-content:center;' +
+      'background:rgba(128,128,128,.2);font-size:18px}',
+    '#jira-chips .chip .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}',
+    '#jira-chips .chip button{border:0;background:transparent;color:inherit;cursor:pointer;font-size:16px;line-height:1;opacity:.6;padding:2px 4px}',
+    '#jira-chips .chip button:hover{opacity:1}',
     /* Skill-Vorschläge */
     '#jira-skills{position:fixed;z-index:2147483002;display:none;max-height:260px;overflow:auto;min-width:280px;max-width:520px;' +
       'background:#fff;color:#222;border:1px solid #ddd;border-radius:10px;box-shadow:0 6px 20px rgba(0,0,0,.18);font-size:13px;padding:4px}',
@@ -310,10 +319,61 @@
   attachBtn.addEventListener("click", function () { fileInput.click(); });
 
   var uploadsInFlight = 0;
+  var attachments = {};   // Chat-ID -> [{name, reference, file, url}]; die Referenz wird erst beim Senden angehängt
+  function currentChatId() {
+    var host = document.querySelector("[data-jira-chat-id]");
+    return host && host.getAttribute("data-jira-chat-id");
+  }
+  function chatAttachments() { var id = currentChatId(); return (id && attachments[id]) || []; }
+  function clearAttachments(id) {
+    (attachments[id] || []).forEach(function (a) { if (a.url) URL.revokeObjectURL(a.url); });
+    attachments[id] = [];
+  }
+  function renderChips() {
+    var ta = textarea(), form = ta && ta.closest("form"), list = chatAttachments();
+    var bar = document.getElementById("jira-chips");
+    if (!form || !list.length) { if (bar) bar.remove(); return; }
+    if (!bar) { bar = document.createElement("div"); bar.id = "jira-chips"; }
+    if (bar.parentNode !== form) form.insertBefore(bar, form.firstChild);
+    var key = list.map(function (a) { return a.reference; }).join("|");
+    if (bar.getAttribute("data-key") === key) return;
+    bar.setAttribute("data-key", key); bar.textContent = "";
+    list.forEach(function (a) {
+      var chip = document.createElement("div"); chip.className = "chip";
+      if (a.file && /^image\//.test(a.file.type)) {
+        a.url = a.url || URL.createObjectURL(a.file);
+        var img = document.createElement("img"); img.src = a.url; img.alt = ""; chip.appendChild(img);
+      } else {
+        var ico = document.createElement("span"); ico.className = "ico"; ico.textContent = "\uD83D\uDCC4"; chip.appendChild(ico);
+      }
+      var nm = document.createElement("span"); nm.className = "nm"; nm.textContent = a.name; nm.title = a.name; chip.appendChild(nm);
+      var rm = document.createElement("button");
+      rm.type = "button"; rm.textContent = "\u00D7"; rm.title = "Remove attachment"; rm.setAttribute("aria-label", "Remove " + a.name);
+      rm.addEventListener("click", function () {
+        var id = currentChatId(), items = attachments[id] || [], i = items.indexOf(a);
+        if (i >= 0) { if (a.url) URL.revokeObjectURL(a.url); items.splice(i, 1); }
+        renderChips(); var t = textarea(); if (t) t.focus();
+      });
+      chip.appendChild(rm); bar.appendChild(chip);
+    });
+  }
   document.addEventListener("submit", function (e) {
-    if (uploadsInFlight && e.target && e.target.querySelector && e.target.querySelector("textarea")) {
+    var form = e.target, ta = form && form.querySelector && form.querySelector("textarea");
+    if (!ta) return;
+    if (uploadsInFlight) {
       e.preventDefault(); e.stopImmediatePropagation(); showToast("Please wait until the attachments have finished uploading.", 5000);
+      return;
     }
+    var id = currentChatId(), list = chatAttachments();
+    // Approvals ("yes CODE") must stay exactly as typed, so attachments wait for the next real message.
+    if (!list.length || /^\s*(?:yes|ja)\s+[A-F0-9]{6}\s*[.!]?\s*$/i.test(ta.value)) return;
+    e.preventDefault(); e.stopImmediatePropagation();
+    var refs = list.map(function (a) { return a.reference; }).join(" ");
+    setText(ta, (ta.value.trim() ? ta.value.replace(/\s*$/, " ") : "") + refs);
+    setTimeout(function () {
+      clearAttachments(id); renderChips();
+      if (form.requestSubmit) form.requestSubmit();
+    }, 60);
   }, true);
   function uploadFiles(files) {
     files = Array.prototype.slice.call(files || []).map(function (f) {
@@ -347,9 +407,13 @@
         showToast("These files belong to the previous chat. Please attach them again in the current chat.", 7000); return;
       }
       var ta = textarea();
-      if (ta && done.length) {
-        var refs = done.map(function (d) { return d.reference; }).join(" ");
-        setText(ta, (ta.value ? ta.value.replace(/\s*$/, " ") : "") + refs + " "); ta.focus();
+      if (done.length) {
+        var list = attachments[chatId] = attachments[chatId] || [];
+        results.forEach(function (r, i) {
+          if (r.status === "fulfilled") list.push({ name: r.value.name, reference: r.value.reference, file: files[i] });
+        });
+        renderChips();
+        if (ta) ta.focus();
       }
       var text = done.length ? "Uploaded: " + done.map(function (d) { return d.name; }).join(", ") : "";
       if (failed.length) text += (text ? " · " : "") + "Failed: " + failed.map(function (r) { return String(r.reason); }).join("; ");
@@ -379,6 +443,7 @@
     uploadFiles(e.dataTransfer.files);
   }, true);
   function ensureAttach() {
+    renderChips();
     if (!fileInput.isConnected) document.body.appendChild(fileInput);
     var send = document.querySelector('[data-testid="send-button"], [data-testid="stop-button"]');
     if (send && send.parentNode && attachBtn.nextSibling !== send) send.parentNode.insertBefore(attachBtn, send);
