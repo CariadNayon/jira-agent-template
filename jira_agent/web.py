@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import json
 import re
+from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import quote
 
@@ -16,7 +17,7 @@ from fastapi import APIRouter, FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse, Response
 from pydantic import BaseModel
 
-from jira_agent import CFG, __version__, registry
+from jira_agent import CFG, __version__, chatlog, registry
 from jira_agent.jira_client import JiraClient, JiraError
 from jira_agent.llm import PROVIDERS, check_azure_endpoint
 from jira_agent.runtime import (DEFAULT_SETTINGS, WAREHOUSE_ID, agent_name, all_skills, catalog_skills,
@@ -235,6 +236,23 @@ async def download(fid: str, request: Request):
     disposition = "inline" if f.mime.startswith("image/") else "attachment"
     return Response(f.data, media_type=f.mime, headers={
         "Content-Disposition": f'{disposition}; filename="{f.name}"', "Cache-Control": "private, no-store"})
+
+
+@router.get("/api/chatlog")
+async def chat_log(request: Request, chat_id: str | None = None):
+    """Debug log of one chat (or the most recent one) as a text file. Only the signed-in owner can read it."""
+    email, _ = _who(request)
+    if chat_id is not None and not chatlog.CHAT_ID_RE.fullmatch(chat_id):
+        raise HTTPException(400, "Invalid conversation ID.")
+    rendered = chatlog.render(user_state(email), email, chat_id)
+    if rendered is None:
+        raise HTTPException(404, "There is no log for this chat yet. Send a message first. Logs are kept in memory "
+                                 "only and are lost when the app restarts or your session expires.")
+    text, chat = rendered
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    return Response(text, media_type="text/plain; charset=utf-8", headers={
+        "Content-Disposition": f'attachment; filename="jira-agent-chat-log-{stamp}.log"',
+        "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff"})
 
 
 # ---------------------------------------------------------------- Uploads (nur Speicher, nur für den Besitzer)

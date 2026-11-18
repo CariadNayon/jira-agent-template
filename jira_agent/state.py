@@ -41,6 +41,7 @@ class UserState:
     files: dict = field(default_factory=dict)          # vom Agenten erzeugte Dateien (Diagramme, Exporte)
     uploads: dict = field(default_factory=dict)        # vom Nutzer hochgeladene Dateien
     skills: dict | None = None                         # persönliche Skills (geladen aus dem Home-Ordner)
+    chat_logs: dict = field(default_factory=dict)      # Chat-ID -> Debug-Protokoll (nur Speicher, siehe chatlog.py)
     catalog_skills: tuple | None = None                # (Zeitpunkt, {name: Skill}, Gültigkeit) aus dem Skill-Katalog
     catalog_message: str = ''
     credential_lock: threading.RLock = field(default_factory=threading.RLock)

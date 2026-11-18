@@ -33,10 +33,10 @@
     '.jira-hdr-btn{height:32px;display:inline-flex;align-items:center;gap:6px;padding:0 10px;border-radius:8px;cursor:pointer;' +
       'border:1px solid rgba(128,128,128,.35);background:transparent;color:inherit;font-size:13px}',
     '.jira-hdr-btn:hover{background:rgba(128,128,128,.12)}',
-    '#jira-auto-btn{order:0}#jira-guide-btn{order:1}#jira-gear{order:3;padding:0 8px}',
+    '#jira-auto-btn{order:0}#jira-guide-btn{order:1}#jira-log-btn{order:2}#jira-gear{order:3;padding:0 8px}',
     '.jira-hdr-btn.on{background:#fff3cd;border-color:#d9b45a}',
     '.jira-fixed{position:fixed;top:10px;z-index:2147483000;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.15)}',
-    '#jira-gear.jira-fixed{right:14px}#jira-guide-btn.jira-fixed{right:60px}#jira-auto-btn.jira-fixed{right:150px}',
+    '#jira-gear.jira-fixed{right:14px}#jira-guide-btn.jira-fixed{right:60px}#jira-auto-btn.jira-fixed{right:150px}#jira-log-btn.jira-fixed{right:300px}',
     '#jira-overlay{position:fixed;inset:0;z-index:2147483001;background:rgba(0,0,0,.35);display:none;align-items:center;justify-content:center}',
     '#jira-panel{width:min(820px,94vw);height:min(680px,90vh);background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 8px 30px rgba(0,0,0,.25)}',
     '#jira-panel iframe{border:0;width:100%;height:100%}',
@@ -124,6 +124,36 @@
     function () { openPanel("/jira/settings"); });
   var autoBtn = makeButton("jira-auto-btn", "<span>Auto-approve: off</span>",
     "Approve the agent's proposed Jira changes automatically (limited, off by default)", function () {});
+  var DL_SVG =
+    '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+    '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>';
+  var logBtn = makeButton("jira-log-btn", DL_SVG + "<span>Chat log</span>",
+    "Download a log of this chat for debugging: system prompt, tool calls, results, errors and timings", function () { downloadChatLog(); });
+  /* Debug-Protokoll des Chats (liegt nur im Speicher des Servers) als Datei laden. */
+  function downloadChatLog() {
+    var host = document.querySelector("[data-jira-chat-id]");
+    var chatId = host && host.getAttribute("data-jira-chat-id");
+    function fetchLog(id) {
+      return fetch("/jira/api/chatlog" + (id ? "?chat_id=" + encodeURIComponent(id) : ""), { credentials: "same-origin" }).then(function (r) {
+        if (r.ok) {
+          var m = /filename="([^"]+)"/.exec(r.headers.get("Content-Disposition") || "");
+          return r.blob().then(function (b) { return { blob: b, name: m ? m[1] : "jira-agent-chat-log.log", fallback: !id }; });
+        }
+        return r.json().then(function (d) { return d; }, function () { return null; }).then(function (d) {
+          var err = new Error((d && d.detail) || "No log available."); err.status = r.status; throw err;
+        });
+      });
+    }
+    fetchLog(chatId).catch(function (e) {
+      if (e.status === 404 && chatId) return fetchLog("");   // sonst das zuletzt aktive Gespräch
+      throw e;
+    }).then(function (x) {
+      var a = document.createElement("a");
+      a.href = URL.createObjectURL(x.blob); a.download = x.name; document.body.appendChild(a); a.click();
+      setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+      showToast(x.fallback && chatId ? "Downloaded the log of your most recent chat." : "Chat log downloaded.", 4000);
+    }).catch(function (e) { showToast(e.message || "Could not download the log.", 7000); });
+  }
   var titleEl = document.createElement("span");
   titleEl.id = "jira-agent-title";
   var versionEl = document.createElement("span");
@@ -140,13 +170,13 @@
     var header = document.querySelector("header.sticky") || document.querySelector("header");
     var right = header && header.querySelector(".ml-auto");
     if (right) {
-      [autoBtn, guideBtn, gearBtn].forEach(function (b) {
+      [autoBtn, logBtn, guideBtn, gearBtn].forEach(function (b) {
         b.classList.remove("jira-fixed");
         if (b.parentNode !== right) right.appendChild(b);
       });
       if (brandEl.parentNode !== header) header.insertBefore(brandEl, header.firstChild);
     } else {
-      [autoBtn, guideBtn, gearBtn].forEach(function (b) {
+      [autoBtn, logBtn, guideBtn, gearBtn].forEach(function (b) {
         b.classList.add("jira-fixed");
         if (b.parentNode !== document.body) document.body.appendChild(b);
       });

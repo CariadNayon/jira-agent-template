@@ -37,6 +37,7 @@ async def invoke_handler(request: ResponsesAgentRequest) -> ResponsesAgentRespon
         mlflow.update_current_trace(metadata={"performance.request_id": hooks.performance.request_id})
         result = await Runner.run(agent, messages, context=run_ctx, hooks=hooks,
                                   run_config=make_run_config(), max_turns=CFG["agent"]["max_turns"])
+        hooks.chat_result = result
         return ResponsesAgentResponse(output=[public_output_item(item.to_input_item()) for item in result.new_items])
 
 
@@ -51,6 +52,7 @@ async def stream_handler(
         mlflow.update_current_trace(metadata={"performance.request_id": hooks.performance.request_id})
         result = Runner.run_streamed(agent, input=messages, context=run_ctx, hooks=hooks,
                                      run_config=make_run_config(), max_turns=CFG["agent"]["max_turns"])
+        hooks.chat_result = result
         try:
             async for event in process_agent_stream_events(result.stream_events()):
                 hooks.observe_stream(event)

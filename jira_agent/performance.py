@@ -91,6 +91,7 @@ def record_model_queue_wait(seconds: float, *, exhausted: bool = False):
 class PerformanceHooks(RunHooksBase):
     def __init__(self, performance: Performance):
         self.performance = performance
+        self.chat_result = None     # set by the handlers so the chat log can read the run's items at the end
         self._llm_started = None
         self._tools = {}
         self._first_event = True

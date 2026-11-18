@@ -482,7 +482,8 @@ description: Checks an issue for missing information
 <tr><td>No tables visible</td><td>Check user authorization and permissions for catalogs, schemas and tables.</td></tr>
 <tr><td>SQL query rejected</td><td>Check warehouse access, SELECT permission and the table selection under Data sources.</td></tr>
 <tr><td>Database not available</td><td>Without the optional chat database, history is not stored permanently. Investigate other errors separately.</td></tr>
-<tr><td>App does not start</td><td>App → Logs: check resource names, Azure configuration and the latest deployment.</td></tr></table></section>
+<tr><td>App does not start</td><td>App → Logs: check resource names, Azure configuration and the latest deployment.</td></tr>
+<tr><td>Something went wrong in a chat</td><td>Click <b>Chat log</b> in the header right after the problem. It downloads a text file with the instructions, your messages, tool calls, results and errors of this chat. Keys and tokens are masked, but ticket and table content is included: review the file before sharing it. Logs are kept in memory only (last 10 chats, lost on restart).</td></tr></table></section>
 <section class="part" id="nutzen"><p class="eyebrow">EVERYDAY USE</p><h2>Using the agent</h2>
 <div class="box"><b>Jira not connected yet?</b><p><a href="#jira-token">Create and enter your token</a>.</p></div>
 <h3 id="fragen">What can I ask?</h3><p>The agent can create and edit issues, change status and priority, link issues and log work. For example: “Create a test issue in project ABC and assign it to me.” It asks for required fields and requests approval before every change. Use <code>/issue-draft</code> for a reusable creation workflow.</p>
