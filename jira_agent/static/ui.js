@@ -75,7 +75,8 @@
     '#jira-skills div{padding:6px 10px;border-radius:6px;cursor:pointer}',
     '#jira-skills div.active,#jira-skills div:hover{background:#eef3fd}',
     '#jira-skills small{color:#666;margin-left:6px}',
-    '#jira-skills .team{font-size:10px;color:#1b5fd1;border:1px solid #1b5fd1;border-radius:4px;padding:0 4px;margin-left:6px}'
+    '#jira-skills .team{font-size:10px;color:#1b5fd1;border:1px solid #1b5fd1;border-radius:4px;padding:0 4px;margin-left:6px}',
+    '#jira-skills .cat{font-size:10px;color:#7c3aed;border:1px solid #7c3aed;border-radius:4px;padding:0 4px;margin-left:6px}'
   ].join("\n");
   document.head.appendChild(style);
 
@@ -382,7 +383,9 @@
       var row = document.createElement("div");
       if (i === active) row.className = "active";
       var b = document.createElement("b"); b.textContent = "/" + s.name; row.appendChild(b);
-      if (s.quelle === "team" || s.quelle === "katalog") { var t = document.createElement("span"); t.className = "team"; t.textContent = s.quelle === "team" ? "Team" : "Catalog"; row.appendChild(t); }
+      if (s.quelle === "team") { var t = document.createElement("span"); t.className = "team"; t.textContent = "Team"; row.appendChild(t); }
+      else if (s.quelle === "katalog") { var c = document.createElement("span"); c.className = "cat"; c.textContent = "Catalog v" + s.version + " · " + (s.mine ? "you" : s.owner_name); row.appendChild(c); }
+      else if (s.published && s.published.mine) { var p = document.createElement("span"); p.className = "cat"; p.textContent = "Published v" + s.published.version; row.appendChild(p); }
       var d = document.createElement("small"); d.textContent = s.beschreibung; row.appendChild(d);
       row.addEventListener("mousedown", function (e) { e.preventDefault(); choose(i); });
       popup.appendChild(row);

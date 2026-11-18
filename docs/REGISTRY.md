@@ -49,6 +49,18 @@ GRANT MODIFY ON TABLE `ude_dev_we_cariad_t1s_sandbox`.`t1_jira_agent`.`skill_ver
 
 3. In `jira_agent/config.yaml` `registry.enabled: true` setzen, `project.version` erhöhen, pushen. Nach dem Deploy erscheint in Settings → Skills bei eigenen Skills der Knopf **Publish to catalog**.
 
+## So sieht man es in der Oberfläche (Settings → Skills)
+
+| Skill | Badge | Farbe | Knöpfe |
+|---|---|---|---|
+| Team-Skill (Repo) | „Team“ | blau | View |
+| Eigener Skill | „Personal“ | grün | Edit, Publish to catalog, Suggest for the team, Delete |
+| Eigener, bereits veröffentlicht | „Personal“ und „Published vN“ | grün + violett | Edit, **Publish new version**, … |
+| Katalog-Skill eines Kollegen | „Catalog vN · name“ (Besitzer ohne `@…`; bei dir selbst „you“) | violett | View |
+| Eigener Skill, Name im Katalog von jemand anderem | „Personal“ und „Name used in catalog by name“ | grün + orange | Edit, … (kein Publish) |
+
+Der persönliche Skill verdeckt bei dir den Katalogeintrag gleichen Namens; deshalb bleibt er grün und zeigt zusätzlich „Published vN“. Im Chat-Vorschlag beim Tippen von `/` stehen dieselben Hinweise. Die Besitzer-Mailadresse sieht man beim Daraufzeigen (Tooltip). Kollegen sehen neue Versionen spätestens nach 5 Minuten (Zwischenspeicher der Liste); beim Aufruf mit `/name` wird immer die aktuelle Anleitung geladen.
+
 ## So funktioniert es
 
 - **Rechte der Nutzer:** Lesen und Veröffentlichen laufen mit dem Workspace-Token des angemeldeten Nutzers. Die App benutzt dafür keine eigene Identität. Fehlt ein Recht, zeigt Settings → Skills eine verständliche Meldung; der Chat läuft normal weiter.

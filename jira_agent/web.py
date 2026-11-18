@@ -21,7 +21,7 @@ from jira_agent.jira_client import JiraClient, JiraError
 from jira_agent.llm import PROVIDERS, check_azure_endpoint
 from jira_agent.runtime import (DEFAULT_SETTINGS, WAREHOUSE_ID, agent_name, all_skills, catalog_skills,
                                 default_agent_name, identity, load_catalog_skill, load_personal_skills,
-                                load_settings, user_client, with_catalog_skills)
+                                load_settings, user_client)
 from jira_agent.settings_store import SettingsStore, sanitize
 from jira_agent.skills import MAX_PERSONAL, PersonalSkillStore, check_skill, render_skill, team_skills
 from jira_agent.state import UploadSink, get_file, logout, user_state
@@ -293,11 +293,27 @@ class SkillBody(BaseModel):
     anleitung: str = ""
 
 
-def _skill_list(skills: dict) -> list[dict]:
+def _short_owner(owner: str | None) -> str:
+    """'nayon.lenz@cariad.technology' -> 'nayon.lenz' (nur zur Anzeige)."""
+    return (owner or "").split("@", 1)[0]
+
+
+def _skill_list(skills: dict, catalog: dict | None = None, email: str = "") -> list[dict]:
     order = {"team": 0, "katalog": 1}
-    return [{"name": s["name"], "beschreibung": s["beschreibung"], "quelle": s["quelle"],
-             **({"version": s["version"], "owner": s.get("owner")} if s["quelle"] == "katalog" else {})}
-            for s in sorted(skills.values(), key=lambda s: (order.get(s["quelle"], 2), s["name"]))]
+    rows = []
+    for s in sorted(skills.values(), key=lambda s: (order.get(s["quelle"], 2), s["name"])):
+        row = {"name": s["name"], "beschreibung": s["beschreibung"], "quelle": s["quelle"]}
+        if s["quelle"] == "katalog":
+            row.update(version=s["version"], owner=s.get("owner"), owner_name=_short_owner(s.get("owner")),
+                       mine=(s.get("owner") or "").casefold() == email.casefold())
+        elif s["quelle"] == "persoenlich" and catalog and s["name"] in catalog:
+            # Der persönliche Skill verdeckt den Katalogeintrag gleichen Namens; hier bleibt der Stand sichtbar.
+            published = catalog[s["name"]]
+            row["published"] = {"version": published["version"], "owner": published.get("owner"),
+                                "owner_name": _short_owner(published.get("owner")),
+                                "mine": (published.get("owner") or "").casefold() == email.casefold()}
+        rows.append(row)
+    return rows
 
 
 @router.get("/api/skills")
@@ -305,7 +321,8 @@ async def list_skills(request: Request):
     email, token = _who(request)
     state = user_state(email)
     own = await asyncio.to_thread(all_skills, state, email, token)
-    return _skill_list(await asyncio.to_thread(with_catalog_skills, state, token, own))
+    catalog = await asyncio.to_thread(catalog_skills, state, token)
+    return _skill_list({**catalog, **own}, catalog, email)
 
 
 async def _find_skill(name: str, request: Request) -> dict | None:

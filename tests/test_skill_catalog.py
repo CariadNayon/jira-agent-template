@@ -223,6 +223,37 @@ def test_publish_and_use_through_the_app(make_client, warehouse):
     assert status['enabled'] and status['location'].endswith('.' + CFG['registry']['schema'])
 
 
+def test_list_shows_who_published_what_to_publisher_and_colleagues(make_client, warehouse):
+    alice, bob = make_client(ALICE), make_client(BOB)
+    alice.put('/jira/api/skills/sprint-notes', json=SKILL)
+    before = {s['name']: s for s in alice.get('/jira/api/skills').json()}
+    assert before['sprint-notes']['quelle'] == 'persoenlich' and 'published' not in before['sprint-notes']
+    alice.post('/jira/api/registry/skills/sprint-notes/publish')
+    mine = {s['name']: s for s in alice.get('/jira/api/skills').json()}['sprint-notes']
+    assert mine['quelle'] == 'persoenlich'
+    assert mine['published'] == {'version': 1, 'owner': ALICE, 'owner_name': 'alice', 'mine': True}
+    seen = {s['name']: s for s in bob.get('/jira/api/skills').json()}['sprint-notes']
+    assert (seen['quelle'], seen['version'], seen['owner_name'], seen['mine']) == ('katalog', 1, 'alice', False)
+    assert 'published' not in seen
+    alice.put('/jira/api/skills/sprint-notes', json={**SKILL, 'anleitung': 'changed'})
+    alice.post('/jira/api/registry/skills/sprint-notes/publish')
+    assert {s['name']: s for s in alice.get('/jira/api/skills').json()}['sprint-notes']['published']['version'] == 2
+    # Colleagues' skill lists are cached for a few minutes; they see the new version after that (or a reload of the cache).
+    assert {s['name']: s for s in bob.get('/jira/api/skills').json()}['sprint-notes']['version'] == 1
+    user_state(BOB).catalog_skills = None
+    assert {s['name']: s for s in bob.get('/jira/api/skills').json()}['sprint-notes']['version'] == 2
+
+
+def test_personal_skill_with_a_name_owned_by_someone_else_is_flagged(make_client, warehouse):
+    alice, bob = make_client(ALICE), make_client(BOB)
+    alice.put('/jira/api/skills/sprint-notes', json=SKILL)
+    alice.post('/jira/api/registry/skills/sprint-notes/publish')
+    bob.put('/jira/api/skills/sprint-notes', json={**SKILL, 'anleitung': 'bobs own'})
+    own = {s['name']: s for s in bob.get('/jira/api/skills').json()}['sprint-notes']
+    assert own['quelle'] == 'persoenlich'
+    assert own['published']['mine'] is False and own['published']['owner_name'] == 'alice'
+
+
 def test_endpoints_report_a_disabled_catalog(make_client, monkeypatch):
     monkeypatch.setitem(CFG['registry'], 'enabled', False)
     alice = make_client(ALICE)

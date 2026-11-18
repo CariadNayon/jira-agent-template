@@ -28,6 +28,8 @@
   .skill .acts{display:flex;gap:6px}
   .badge{font-size:11px;border-radius:4px;padding:1px 5px;margin-left:6px;border:1px solid #1b5fd1;color:#1b5fd1}
   .badge.own{border-color:#1a7f37;color:#1a7f37}
+  .badge.cat{border-color:#7c3aed;color:#7c3aed}
+  .badge.warn{border-color:#b45309;color:#b45309}
   #skillForm textarea{min-height:180px}
 </style>
 </head>
@@ -158,14 +160,25 @@
         var t = document.createElement("div");
         var n = document.createElement("b"); n.textContent = "/" + s.name; t.appendChild(n);
         var shared = s.quelle === "team" || s.quelle === "katalog";
-        var badge = document.createElement("span"); badge.className = "badge" + (s.quelle === "persoenlich" ? " own" : "");
-        badge.textContent = s.quelle === "team" ? "Team" : s.quelle === "katalog" ? "Catalog v" + s.version : "Personal"; t.appendChild(badge);
+        var pub = s.published || null;
+        function addBadge(text, cls, title) {
+          var b = document.createElement("span"); b.className = "badge" + (cls ? " " + cls : ""); b.textContent = text;
+          if (title) b.title = title; t.appendChild(b);
+        }
+        if (s.quelle === "team") addBadge("Team", "");
+        else if (s.quelle === "katalog") addBadge("Catalog v" + s.version + " · " + (s.mine ? "you" : s.owner_name), "cat",
+          "Published in the shared catalog by " + s.owner + (s.mine ? " (you)" : "") + ". Published versions cannot be changed.");
+        else {
+          addBadge("Personal", "own");
+          if (pub && pub.mine) addBadge("Published v" + pub.version, "cat", "Your latest published version in the shared catalog.");
+          else if (pub) addBadge("Name used in catalog by " + pub.owner_name, "warn", "This name is already published by " + pub.owner + ". Choose another name to publish.");
+        }
         var acts = document.createElement("div"); acts.className = "acts";
         if (shared) {
           acts.appendChild(skillButton("View", function () { editSkill(s.name, true); }));
         } else {
           acts.appendChild(skillButton("Edit", function () { editSkill(s.name, false); }));
-          if (reg.enabled) acts.appendChild(skillButton("Publish to catalog", async function () {
+          if (reg.enabled && !(pub && !pub.mine)) acts.appendChild(skillButton(pub ? "Publish new version" : "Publish to catalog", async function () {
             if (!confirm("Publish /" + s.name + " to the shared skill catalog?\n\nEveryone with access to the catalog can then use it. " +
                 "A published version cannot be changed or deleted; later changes become a new version.")) return;
             try {
