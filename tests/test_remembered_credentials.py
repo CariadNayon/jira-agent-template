@@ -228,6 +228,41 @@ def test_failed_save_and_failed_forget_do_not_claim_success_or_leak_details(stor
     assert disk and user_state(OWNER).creds['jira_token'] == PAT
 
 
+def _raise(exc):
+    def fail(*args, **kwargs):
+        raise exc
+    return fail
+
+
+def test_storage_failures_explain_the_cause_and_log_without_token(storage, caplog):
+    from databricks.sdk.errors import PermissionDenied, ResourceDoesNotExist
+    client, clients, disk, _, _ = storage
+    ws = clients[OWNER].workspace
+    cases = [(PermissionDenied('Unauthorized access to Org: 1 ' + PAT), 403, 'no access to the Databricks workspace'),
+             (PermissionDenied('User does not have permission'), 403, 'accept the requested permissions'),
+             (ResourceDoesNotExist('Path does not exist'), 403, 'home folder was not found'),
+             (RuntimeError('PRIVATE-SERVICE-ERROR'), 502, 'could not be updated (RuntimeError)')]
+    for exc, status, text in cases:
+        ws.mkdirs = _raise(exc)
+        with caplog.at_level('WARNING', logger='jira_agent.credentials'):
+            response = connect(client)
+        assert response.status_code == status and text in response.json()['detail']
+        assert PAT not in response.text and 'PRIVATE-SERVICE-ERROR' not in response.text
+        assert not user_state(OWNER).creds and not disk
+    assert type(cases[0][0]).__name__ in caplog.text and PAT not in caplog.text
+
+
+def test_session_only_connection_works_without_workspace_access(storage):
+    from databricks.sdk.errors import PermissionDenied
+    client, clients, disk, _, _ = storage
+    clients[OWNER].workspace.delete = _raise(PermissionDenied('Unauthorized access to Org: 1'))
+    response = connect(client, remember=False)
+    assert response.status_code == 200 and not response.json()['jira_remembered']
+    assert client.delete('/jira/api/credentials').status_code == 200
+    clients[OWNER].workspace.delete = _raise(PermissionDenied('User does not have permission'))
+    assert connect(client, remember=False).status_code == 403
+
+
 @pytest.mark.parametrize('key', ['', 'invalid-fernet-key'])
 def test_missing_key_disables_remember_but_keeps_session_connection(storage, monkeypatch, key):
     client, _, disk, _, _ = storage

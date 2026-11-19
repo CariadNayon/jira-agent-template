@@ -27,8 +27,9 @@ from jira_agent.settings_store import SettingsStore, sanitize
 from jira_agent.skills import MAX_PERSONAL, NAME_RE, PersonalSkillStore, check_skill, render_skill, team_skills
 from jira_agent.state import UploadSink, get_file, logout, user_state
 from jira_agent.uploads import validate_upload
-from jira_agent.credentials import (JiraTokenStore, cipher, remember_availability, remember_days,
-                                    restore_jira, set_jira_identity)
+from jira_agent.credentials import (JiraTokenStore, cipher, log_storage_failure, remember_availability,
+                                    remember_days, restore_jira, set_jira_identity, storage_message,
+                                    storage_problem)
 
 _STATIC = Path(__file__).parent / "static"
 _UI_TAG = b'<script src="/jira/static/ui.js" defer></script>'
@@ -116,8 +117,14 @@ def _connect_jira(state, email, user_token, jira_token, remember):
                 raise HTTPException(403, 'Sign in again to remove the previously saved Jira token.')
         except HTTPException:
             raise
-        except Exception:
-            raise HTTPException(502, 'The saved Jira connection could not be updated. Please try again.') from None
+        except Exception as exc:
+            problem = storage_problem(exc)
+            log_storage_failure('save' if remember else 'cleanup', email, exc, jira_token)
+            # Without workspace access nothing can have been saved, so a session-only connection must still work.
+            if remember or state.jira_saved or problem != 'no_workspace_access':
+                status = 502 if problem == 'unexpected' else 403
+                raise HTTPException(status, storage_message(
+                    problem, exc, 'The saved Jira connection could not be updated')) from None
         set_jira_identity(state, jira_token, myself)
         state.jira_saved = remember
         state.jira_saved_until = expires_at
@@ -154,10 +161,14 @@ async def delete_credentials(request: Request, response: Response):
                 try:
                     JiraTokenStore(_client(user_token), email).delete()
                     removed = True
-                except Exception:
+                except Exception as exc:
                     # Ohne Remember-Funktion ist die Löschung nur ein Aufräumversuch und darf das Abmelden nicht blockieren.
-                    if cipher() is not None or state.jira_saved:
-                        raise HTTPException(502, 'The saved Jira token could not be deleted. Please try again.') from None
+                    problem = storage_problem(exc)
+                    log_storage_failure('delete', email, exc)
+                    if state.jira_saved or (cipher() is not None and problem != 'no_workspace_access'):
+                        status = 502 if problem == 'unexpected' else 403
+                        raise HTTPException(status, storage_message(
+                            problem, exc, 'The saved Jira token could not be deleted')) from None
             elif state.jira_saved:
                 raise HTTPException(403, 'Sign in again to forget the saved Jira token.')
             state.creds.clear()

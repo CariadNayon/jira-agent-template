@@ -4,7 +4,9 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+import logging
 import os
+import re
 import time
 
 from jira_agent import BUNDLE, CFG
@@ -17,6 +19,45 @@ _MAX_BYTES = 16 * 1024
 
 class SavedTokenError(ValueError):
     pass
+
+
+_log = logging.getLogger('jira_agent.credentials')
+_NO_WORKSPACE_RE = re.compile(r'unauthorized access to org', re.I)
+_REMEMBER_OFF = 'or connect without "Remember for my account".'
+STORAGE_MESSAGES = {
+    'no_workspace_access': ('Your account has no access to the Databricks workspace behind this app, so the Jira '
+                            'token cannot be remembered. Ask a workspace admin to add you to the workspace, '
+                            + _REMEMBER_OFF),
+    'missing_permission': ('Your sign-in does not allow the app to save files in your workspace folder. Sign out, '
+                           'open the app in a new browser window and accept the requested permissions again.'),
+    'missing_folder': ('Your Databricks home folder was not found. Open the Databricks workspace once so it is '
+                       'created, then try again, ' + _REMEMBER_OFF),
+}
+
+
+def storage_problem(exc: Exception) -> str:
+    """Classify a failure of the user's workspace storage without exposing service details."""
+    from databricks.sdk.errors import NotFound, PermissionDenied, ResourceDoesNotExist, Unauthenticated
+    if isinstance(exc, PermissionDenied) and _NO_WORKSPACE_RE.search(str(exc)):
+        return 'no_workspace_access'
+    if isinstance(exc, (PermissionDenied, Unauthenticated)):
+        return 'missing_permission'
+    if isinstance(exc, (NotFound, ResourceDoesNotExist)):
+        return 'missing_folder'
+    return 'unexpected'
+
+
+def storage_message(problem: str, exc: Exception, unexpected: str) -> str:
+    """User-facing text; unexpected errors only name the error type, never the service message."""
+    return STORAGE_MESSAGES.get(problem) or f'{unexpected} ({type(exc).__name__}). Please try again.'
+
+
+def log_storage_failure(action: str, email: str, exc: Exception, secret: str | None = None):
+    """Log the cause for app owners; the Jira token is masked in case a service echoes it."""
+    detail = ' '.join(str(exc).split())
+    if secret:
+        detail = detail.replace(secret, '***')
+    _log.warning('Jira token %s failed for %s: %s: %s', action, email, type(exc).__name__, detail[:400])
 
 
 def cipher():
