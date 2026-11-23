@@ -72,22 +72,32 @@ def jira_get_myself(ctx: ToolContext) -> dict:
 
 @tool(needs=["jira"])
 def jira_list_projects(ctx: ToolContext, query: str = "", max_results: int = 30, start_at: int = 0) -> dict:
-    """Lists projects visible to the Jira user with their project keys. There can be thousands, so search
-    with query (matches key or name) instead of listing everything; continue with next_start_at if truncated.
+    """Find accessible projects by key or name. For multiword searches with no exact/substring match,
+    provide alternative candidates containing individual search words, without guessing a project key.
 
-    query: optional text to find in the project key or name, case-insensitive
+    query: project key, full name or a distinctive word from the name
     max_results: projects per call, 1 to 100
-    start_at: zero-based position; use next_start_at from the previous result"""
+    start_at: zero-based position; use next_start_at if truncated"""
     if start_at < 0:
         raise ValueError("start_at must not be negative.")
     needle = (query or "").strip().casefold()
-    projects = [p for p in ctx.jira.projects()
-                if not needle or needle in str(p.get("key") or "").casefold() or needle in str(p.get("name") or "").casefold()]
-    page = projects[start_at:start_at + max(1, min(int(max_results), 100))]
+    projects = ctx.jira.projects()
+    matches = [p for p in projects if not needle or
+               needle in str(p.get("key") or "").casefold() or needle in str(p.get("name") or "").casefold()]
+    approximate = False
+    if needle and not matches:
+        tokens = [token for token in needle.split() if len(token) >= 3]
+        if len(tokens) > 1:
+            matches = [p for p in projects if any(token in str(p.get("key") or "").casefold()
+                       or token in str(p.get("name") or "").casefold() for token in tokens)]
+            approximate = bool(matches)
+    size = max(1, min(int(max_results), 100))
+    page = matches[start_at:start_at + size]
     end = start_at + len(page)
-    return {"projects": page, "total": len(projects), "start_at": start_at,
-            "truncated": end < len(projects), "next_start_at": end if end < len(projects) else None}
-
+    return {"projects": page, "total": len(matches), "start_at": start_at,
+            "truncated": end < len(matches), "next_start_at": end if end < len(matches) else None,
+            "approximate_matches": approximate,
+            "hint": "Candidates only; confirm the project name/key before searching." if approximate else ""}
 
 @tool(needs=["jira"])
 def jira_list_issue_types(ctx: ToolContext, project: str) -> dict:
