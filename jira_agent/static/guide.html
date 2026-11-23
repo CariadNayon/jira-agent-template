@@ -111,7 +111,7 @@ td,th{padding:8px 5px}
 </ul><p>Your workspace names and IDs are configured in <code>databricks.yml → variables</code>. These are separate from your Jira credentials.</p></div>
 <nav class="toc" aria-label="Bootstrap steps"><a href="#code-holen">1. Get the code</a><a href="#app-anlegen">2. Create an app</a><a href="#zugriffe">3. Configure access</a><a href="#bereitstellen">4. Deploy</a><a href="#jira-token">5. Connect Jira</a></nav>
 <h2 id="code-holen">1. Get the code into your workspace</h2>
-<p>To develop your own agent, first create your own copy of the GitHub repository using <b>Use this template</b>, if available, or a fork. Use your copy's URL. The URL below connects the shared template.</p>
+<p>Clone the Jira Agent template from the internal VW GitHub Enterprise repository below. You need access to <b>git.hub.vwgroup.com</b> (including VPN or corporate network access where required) and permission to read the repository. In Databricks, select the appropriate Git provider and configure Git credentials if prompted. Use the repository URL shown below.</p>
 <ol class="steps">
 <li><h3>Open Workspace</h3><p>Click <b>Workspace</b> in the left navigation (1).</p><figure>
 <button class="screenshot" type="button" aria-label="Enlarge image: 1 · Workspace in the left navigation"><img src="/jira/static/img/go_to_workspace.png" alt="1 · Workspace in the left navigation" loading="lazy">
@@ -176,7 +176,7 @@ td,th{padding:8px 5px}
 </button>
 <figcaption>1 · Create Git folder · Click to enlarge</figcaption>
 </figure><p class="result"><b>Result:</b> The repository settings are shown.</p></li>
-<li><h3>Enter the repository URL</h3><p>Enter your own repository URL, or use the shared template URL below (1). Click <b>Create Git folder</b> (2).</p><div class="prompt"><pre>https://github.com/CariadNayon/jira-agent-template.git</pre><button class="btn" type="button" data-copy>Copy</button></div><figure>
+<li><h3>Enter the repository URL</h3><p>Enter the internal VW Jira Agent repository URL shown below (1), then click <b>Create Git folder</b> (2). Ensure that your Databricks Git credentials can access this repository.</p><div class="prompt"><pre>https://git.hub.vwgroup.com/v8ee318/jira_agent_template.git</pre><button class="btn" type="button" data-copy>Copy</button></div><figure>
 <button class="screenshot" type="button" aria-label="Enlarge image: 1 · Repository URL → 2 · Create Git folder"><img src="/jira/static/img/add_this_url.png" alt="1 · Repository URL → 2 · Create Git folder" loading="lazy">
 <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
 <defs><marker id="arrow-add_this_url" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="4" markerHeight="4" orient="auto-start-reverse">
