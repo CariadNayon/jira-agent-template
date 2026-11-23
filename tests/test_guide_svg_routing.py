@@ -33,7 +33,7 @@ def test_svg_images_are_served_with_correct_mime(name):
 def test_existing_png_still_works():
     response = asyncio.run(guide_image("go_to_workspace.png"))
     assert response.media_type == "image/png"
-    assert response.body.startswith(b"\\x89PNG\\r\\n\\x1a\\n")
+    assert response.body.startswith(bytes([137, 80, 78, 71, 13, 10, 26, 10]))
 
 
 @pytest.mark.parametrize("name", ["../web.py", "nope.svg", "web.html", "upper.SVG"])
