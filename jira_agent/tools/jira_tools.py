@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import re
 import time
+from datetime import datetime, timezone
 
 from jira_agent.jira_client import JiraClient
 from jira_agent.tools import ToolContext, tool
@@ -12,8 +13,20 @@ CHAT_MAX_RESULTS = 50      # Treffer pro Suche im Chat
 EXPORT_PAGE_SIZE = 100     # Treffer pro Jira-API-Seite
 
 
-def summarize_issue(issue: dict) -> dict:
+def summarize_issue(issue: dict, *, now: datetime | None = None) -> dict:
     f = issue.get("fields", {})
+    created = f.get("created")
+    age_days = None
+    if isinstance(created, str):
+        try:
+            parsed = datetime.fromisoformat(created.replace("Z", "+00:00"))
+            if parsed.tzinfo is not None:
+                today = (now or datetime.now(timezone.utc)).astimezone(timezone.utc).date()
+                age_days = (today - parsed.astimezone(timezone.utc).date()).days
+                if age_days < 0:
+                    age_days = None
+        except ValueError:
+            pass
     return {
         "key": issue.get("key"),
         "summary": f.get("summary"),
@@ -22,7 +35,8 @@ def summarize_issue(issue: dict) -> dict:
         "components": [c.get("name") for c in f.get("components") or []],
         "assignee": (f.get("assignee") or {}).get("name"),
         "updated": f.get("updated"),
-        "created": f.get("created"),
+        "created": created,
+        "age_days": age_days,
         "resolution": (f.get("resolution") or {}).get("name"),
         "issue_type": (f.get("issuetype") or {}).get("name"),
         "fix_versions": [v.get("name") for v in f.get("fixVersions") or []],
