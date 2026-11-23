@@ -44,5 +44,5 @@ def test_ai_guide_uses_original_screenshots():
         assert len(data) > 2000
     assert "Original screenshot (cropped)" in section
     assert "Red arrows mark the action" in section
-    for old_name in (["ai_branch_selector.svg","ai_branch_pull_create.svg","ai_branch_name.svg","ai_deploy_menu.svg","ai_deploy_branch.svg","ai_windows_terminal.svg"]).split(","):
+    for old_name in ("ai_branch_selector.svg", "ai_branch_pull_create.svg", "ai_branch_name.svg", "ai_deploy_menu.svg", "ai_deploy_branch.svg", "ai_windows_terminal.svg"):
         assert old_name not in section
