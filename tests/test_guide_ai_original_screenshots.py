@@ -18,7 +18,8 @@ def test_missing_original_screenshots_are_linked():
     for filename, caption in IMAGES.items():
         assert f'/jira/static/img/{filename}' in SECTION
         assert caption in SECTION
-    assert "Open the Databricks Git project folder" in SECTION
+    assert "Open the personal Databricks Git folder" in SECTION
+    assert "/jira/static/img/ai_original_git_folder.svg" in SECTION
     assert "Original screenshot" in SECTION
 
 
