@@ -66,3 +66,24 @@ def test_guidance_includes_stress_test_guards():
     assert "never JQL" in JIRA_GUIDANCE
     assert "ORDER BY created ASC" in JIRA_GUIDANCE
     assert "Never invent a SQL table" in JIRA_GUIDANCE
+
+def test_exact_project_name_is_resolved_to_key():
+    class NamedProjectJira(FakeJira):
+        def projects(self):
+            return [{"key": "PPE", "name": "Conmod PPE"}]
+
+    jira = NamedProjectJira(issues={"PPE-1": {"summary": "Change request"}})
+    result = run_tool("jira_search_tickets", jira=jira, project="Conmod PPE")
+    assert result["query"].startswith('project = "PPE"')
+    assert jira.calls[-1][2]["jql"].startswith('project = "PPE"')
+
+
+def test_ambiguous_project_name_does_not_guess():
+    class DuplicateProjectJira(FakeJira):
+        def projects(self):
+            return [{"key": "PPE", "name": "Conmod PPE"}, {"key": "PPE2", "name": "Conmod PPE"}]
+
+    jira = DuplicateProjectJira()
+    result = run_tool("jira_search_tickets", jira=jira, project="Conmod PPE")
+    assert result["error"] == "ValueError"
+    assert "ambiguous" in result["details"]
