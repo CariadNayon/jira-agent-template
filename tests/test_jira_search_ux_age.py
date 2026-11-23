@@ -62,4 +62,4 @@ def test_exact_project_search_remains_precise():
 
 def test_guidance_keeps_project_optional_for_readonly_search():
     assert "read-only Jira search specifies no project" in JIRA_GUIDANCE
-    assert "returned age_days calculated by Python" in JIRA_GUIDANCE
+    assert "age_days returned by the Python Jira tool" in JIRA_GUIDANCE
