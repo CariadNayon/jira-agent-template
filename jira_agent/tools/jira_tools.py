@@ -108,7 +108,10 @@ def jira_search(ctx: ToolContext, jql: str, max_results: int = 20, start_at: int
         raise ValueError("JQL must be a nonempty query string.")
     if start_at < 0:
         raise ValueError("start_at must not be negative.")
-    return {**search_issues(ctx.jira, jql, max(1,min(int(max_results), CHAT_MAX_RESULTS)), start_at), "query": jql}
+    # @me is a supported structured-search shortcut, not valid raw Jira JQL.
+    # Resolve it only as the standalone assignee value, never inside quoted text.
+    normalized_jql = re.sub(r"(?i)(\bassignee\s*=\s*)@me\b", r"\1currentUser()", jql)
+    return {**search_issues(ctx.jira, normalized_jql, max(1,min(int(max_results), CHAT_MAX_RESULTS)), start_at), "query": normalized_jql}
 
 
 @tool(needs=["jira"])
