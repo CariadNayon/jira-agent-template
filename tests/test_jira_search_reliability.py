@@ -1,21 +1,19 @@
 """Regression tests for Jira search reliability and stress-test failures."""
-import pytest
-
 from jira_agent.testing import FakeJira, run_tool
 from jira_agent.runtime import JIRA_GUIDANCE
 
 
 def test_plain_text_search_rejects_jql_issue_type():
     jira = FakeJira(issues={"ABC-1": {"summary": "Change request"}})
-    with pytest.raises(ValueError, match="not JQL"):
-        run_tool("jira_search_tickets", jira=jira, text='issuetype="Change Request"')
+    result = run_tool("jira_search_tickets", jira=jira, text='issuetype="Change Request"')
+    assert result["error"] == "ValueError" and "not JQL" in result["details"]
     assert jira.calls == []
 
 
 def test_plain_text_search_rejects_jql_fix_version():
     jira = FakeJira()
-    with pytest.raises(ValueError, match="not JQL"):
-        run_tool("jira_search_tickets", jira=jira, text="fixVersion=CL8.21")
+    result = run_tool("jira_search_tickets", jira=jira, text="fixVersion=CL8.21")
+    assert result["error"] == "ValueError" and "not JQL" in result["details"]
     assert jira.calls == []
 
 
@@ -50,8 +48,8 @@ def test_search_requires_valid_total():
         def search(self, *args, **kwargs):
             return {"issues": [], "startAt": 0}
 
-    with pytest.raises(ValueError, match="reliable issue count"):
-        run_tool("jira_search", jira=MissingTotalJira(), jql="project = ABC")
+    result = run_tool("jira_search", jira=MissingTotalJira(), jql="project = ABC")
+    assert result["error"] == "ValueError" and "reliable issue count" in result["details"]
 
 
 def test_search_rejects_mismatched_page():
@@ -59,8 +57,8 @@ def test_search_rejects_mismatched_page():
         def search(self, *args, **kwargs):
             return {"issues": [], "total": 5, "startAt": 0}
 
-    with pytest.raises(ValueError, match="unexpected results page"):
-        run_tool("jira_search", jira=WrongPageJira(), jql="project = ABC", start_at=2)
+    result = run_tool("jira_search", jira=WrongPageJira(), jql="project = ABC", start_at=2)
+    assert result["error"] == "ValueError" and "unexpected results page" in result["details"]
 
 
 def test_guidance_includes_stress_test_guards():
