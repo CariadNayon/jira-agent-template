@@ -34,7 +34,7 @@ from jira_agent.credentials import (JiraTokenStore, cipher, log_storage_failure,
 _STATIC = Path(__file__).parent / "static"
 _UI_TAG = b'<script src="/jira/static/ui.js" defer></script>'
 _CSP = "img-src 'self' data: blob:"
-_IMG_RE = re.compile(r"[a-z0-9_\-]+\.png")
+_IMG_RE = re.compile(r"[a-z0-9_\-]+\.(?:png|svg)")
 _UPLOAD_NAME_RE = re.compile(r"[^\w.\- ()äöüÄÖÜß]+")
 _MAX_UPLOAD = 20 * 1024 * 1024
 
@@ -498,7 +498,8 @@ async def guide_image(name: str):
     path = _STATIC / "img" / name
     if not _IMG_RE.fullmatch(name) or not path.is_file():
         raise HTTPException(404, "Image not found.")
-    return Response(path.read_bytes(), media_type="image/png", headers={"Cache-Control": "public, max-age=3600"})
+    return Response(path.read_bytes(), media_type="image/svg+xml" if name.endswith(".svg") else "image/png",
+                    headers={"Cache-Control": "public, max-age=3600", "X-Content-Type-Options": "nosniff"})
 
 
 def inject_ui(html: bytes) -> bytes:
