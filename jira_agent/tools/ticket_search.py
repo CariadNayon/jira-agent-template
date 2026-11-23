@@ -5,6 +5,7 @@ import re
 from typing import Literal
 
 from jira_agent.jira_client import JiraClient
+from jira_agent.write_outcome import InputValidationError
 from jira_agent.tools import ToolContext, tool
 from jira_agent.tools.jira_tools import CHAT_MAX_RESULTS, search_issues
 
@@ -16,6 +17,19 @@ def _quoted(value: str, *, max_length: int = 255) -> str:
     return '"' + value.replace('\\', '\\\\').replace('"', '\\"') + '"'
 
 
+def _resolve_project(jira: JiraClient, project: str) -> str:
+    """Accept valid keys or resolve an exact project name with the caller's Jira rights."""
+    try:
+        return JiraClient.check_project(project)
+    except InputValidationError:
+        if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_ .-]{1,254}', project or '') or ' ' not in project.strip():
+            raise ValueError('Invalid project key or project name.') from None
+        matches = [p for p in jira.projects() if str(p.get('name') or '').casefold() == project.strip().casefold()]
+        if len(matches) != 1 or not matches[0].get('key'):
+            raise ValueError('Project name is unknown or ambiguous. Use jira_list_projects to select a key.')
+        return JiraClient.check_project(matches[0]['key'])
+
+
 @tool(needs=['jira'])
 def jira_search_tickets(ctx: ToolContext, project: str = '', text: str = '', assignee: str = '',
                         state: Literal['any', 'open', 'resolved'] = 'any', status: str = '',
@@ -24,7 +38,7 @@ def jira_search_tickets(ctx: ToolContext, project: str = '', text: str = '', ass
     All filters are combined with AND. Empty filters mean any value. Results use the caller's Jira rights.
     Use jira_get_issue to show full details for a known key and jira_search for advanced JQL only.
 
-    project: optional project key, e.g. ABC; ask when the requested project is ambiguous
+    project: optional project key or exact project name; ambiguous names require clarification
     text: optional plain text phrase to find in issue text; not JQL or Lucene syntax
     assignee: Jira username, @me for the signed-in Jira user, @unassigned, or empty for anyone
     state: any, open (unresolved, including in progress), or resolved
@@ -32,13 +46,19 @@ def jira_search_tickets(ctx: ToolContext, project: str = '', text: str = '', ass
     max_results: result preview size, 1–50; use 1 for a requested example ticket
     start_at: zero-based position; continue with next_start_at from the previous result
     """
+    if re.match(r'(?i)^\s*(?:issuetype|fixversion|resolution|created|updated|priority|project|assignee|status)\s*(?:=|!=|<=|>=|<|>|\bIS\b|\bIN\b)', text or '') or re.match(r'(?i)^\s*ORDER\s+BY\b', text or ''):
+        raise ValueError('The text parameter accepts a plain text phrase, not JQL. Use jira_search(jql=...) for filters.')
     if state not in ('any', 'open', 'resolved'):
         raise ValueError('state must be any, open or resolved.')
     if start_at < 0:
         raise ValueError('start_at must not be negative.')
+    if text:
+        _quoted(text)
+    if status:
+        _quoted(status)
     conditions = []
     if project:
-        conditions.append('project = ' + _quoted(JiraClient.check_project(project)))
+        conditions.append('project = ' + _quoted(_resolve_project(ctx.jira, project)))
     if text:
         _quoted(text)  # Validate before escaping the nested Lucene phrase.
         phrase = re.sub(r'([+\-&|!(){}\[\]^"~*?:\\/])', r'\\\1', text)

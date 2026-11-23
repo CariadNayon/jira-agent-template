@@ -148,7 +148,10 @@ class FakeJira(JiraClient):
             "status": {"name": i.get("status")}, "priority": {"name": i.get("priority")} if i.get("priority") else None,
             "assignee": {"name": i["assignee"]} if i.get("assignee") else None,
             "components": [{"name": c} for c in i.get("components", [])], "labels": list(i["labels"]),
-            "updated": i.get("updated")}}
+            "updated": i.get("updated"), "created": i.get("created"),
+            "resolution": {"name": i["resolution"]} if i.get("resolution") else None,
+            "issuetype": {"name": i["issue_type"]} if i.get("issue_type") else None,
+            "fixVersions": [{"name": v} for v in i.get("fix_versions", [])]}}
 
 
 class FakeSql:
