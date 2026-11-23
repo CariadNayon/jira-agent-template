@@ -5,7 +5,7 @@ import re
 import time
 from datetime import datetime, timezone
 
-from jira_agent.jira_client import JiraClient
+from jira_agent.jira_client import JiraClient, JiraError
 from jira_agent.tools import ToolContext, tool
 
 _FIELDS = "summary,status,priority,components,assignee,updated,created,resolution,issuetype,fixVersions"
@@ -66,7 +66,13 @@ def export_issues(jira: JiraClient, jql: str, limit: int, start_at: int = 0, tim
     while len(issues)<limit:
         if time.monotonic()>=deadline:
             reason='Time limit reached. The export is incomplete.';break
-        data=jira.search(query,min(EXPORT_PAGE_SIZE,limit-len(issues)),fields=_FIELDS,start_at=offset)
+        try:
+            data=jira.search(query,min(EXPORT_PAGE_SIZE,limit-len(issues)),fields=_FIELDS,start_at=offset)
+        except JiraError as exc:
+            if exc.status_code == 429:
+                reason='Jira rate limit exceeded (HTTP 429). The breakdown is incomplete; narrow the scope or retry later.'
+                break
+            raise
         current=data.get('total')
         if not isinstance(current,int) or current<0:
             reason='Jira did not report a reliable total. Completeness is unconfirmed.';break
@@ -108,7 +114,10 @@ def jira_search(ctx: ToolContext, jql: str, max_results: int = 20, start_at: int
         raise ValueError("JQL must be a nonempty query string.")
     if start_at < 0:
         raise ValueError("start_at must not be negative.")
-    return {**search_issues(ctx.jira, jql, max(1,min(int(max_results), CHAT_MAX_RESULTS)), start_at), "query": jql}
+    # @me is a supported structured-search shortcut, not valid raw Jira JQL.
+    # Resolve it only as the standalone assignee value, never inside quoted text.
+    normalized_jql = re.sub(r"(?i)(\bassignee\s*=\s*)@me\b", r"\1currentUser()", jql)
+    return {**search_issues(ctx.jira, normalized_jql, max(1,min(int(max_results), CHAT_MAX_RESULTS)), start_at), "query": normalized_jql}
 
 
 @tool(needs=["jira"])
