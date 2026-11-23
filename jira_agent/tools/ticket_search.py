@@ -22,6 +22,8 @@ def _resolve_project(jira: JiraClient, project: str) -> str:
     try:
         return JiraClient.check_project(project)
     except InputValidationError:
+        if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9_ .-]{1,254}', project or '') or ' ' not in project.strip():
+            raise ValueError('Invalid project key or project name.') from None
         matches = [p for p in jira.projects() if str(p.get('name') or '').casefold() == project.strip().casefold()]
         if len(matches) != 1 or not matches[0].get('key'):
             raise ValueError('Project name is unknown or ambiguous. Use jira_list_projects to select a key.')
@@ -44,12 +46,16 @@ def jira_search_tickets(ctx: ToolContext, project: str = '', text: str = '', ass
     max_results: result preview size, 1–50; use 1 for a requested example ticket
     start_at: zero-based position; continue with next_start_at from the previous result
     """
-    if re.search(r'(?i)\b(?:issuetype|fixversion|resolution|created|updated|priority|project|assignee|status)\s*(?:=|!=|<=|>=|<|>|\bIS\b|\bIN\b)', text or '') or re.search(r'(?i)\b(?:ORDER\s+BY|AND|OR)\b', text or ''):
+    if re.match(r'(?i)^\s*(?:issuetype|fixversion|resolution|created|updated|priority|project|assignee|status)\s*(?:=|!=|<=|>=|<|>|\bIS\b|\bIN\b)', text or '') or re.match(r'(?i)^\s*ORDER\s+BY\b', text or ''):
         raise ValueError('The text parameter accepts a plain text phrase, not JQL. Use jira_search(jql=...) for filters.')
     if state not in ('any', 'open', 'resolved'):
         raise ValueError('state must be any, open or resolved.')
     if start_at < 0:
         raise ValueError('start_at must not be negative.')
+    if text:
+        _quoted(text)
+    if status:
+        _quoted(status)
     conditions = []
     if project:
         conditions.append('project = ' + _quoted(_resolve_project(ctx.jira, project)))
