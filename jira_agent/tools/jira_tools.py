@@ -116,7 +116,7 @@ def jira_get_issue(ctx: ToolContext, issue_key: str) -> dict:
     """Returns issue details, the actual project and description. Use project.key to work in the same project.
 
     issue_key: issue key, e.g. ABC-123"""
-    issue = ctx.jira.issue(issue_key, fields="project,summary,description,status,priority,components,assignee,labels,updated")
+    issue = ctx.jira.issue(issue_key, fields="project,summary,description,status,priority,components,assignee,labels,updated,created,resolution,issuetype,fixVersions")
     out = summarize_issue(issue)
     project = issue.get('fields', {}).get('project') or {}
     out['project'] = {'key': project.get('key'), 'name': project.get('name')}
