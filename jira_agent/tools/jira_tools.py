@@ -7,7 +7,7 @@ import time
 from jira_agent.jira_client import JiraClient
 from jira_agent.tools import ToolContext, tool
 
-_FIELDS = "summary,status,priority,components,assignee,updated"
+_FIELDS = "summary,status,priority,components,assignee,updated,created,resolution,issuetype,fixVersions"
 CHAT_MAX_RESULTS = 50      # Treffer pro Suche im Chat
 EXPORT_PAGE_SIZE = 100     # Treffer pro Jira-API-Seite
 
@@ -22,11 +22,19 @@ def summarize_issue(issue: dict) -> dict:
         "components": [c.get("name") for c in f.get("components") or []],
         "assignee": (f.get("assignee") or {}).get("name"),
         "updated": f.get("updated"),
+        "created": f.get("created"),
+        "resolution": (f.get("resolution") or {}).get("name"),
+        "issue_type": (f.get("issuetype") or {}).get("name"),
+        "fix_versions": [v.get("name") for v in f.get("fixVersions") or []],
     }
 
 
 def search_issues(jira: JiraClient, jql: str, max_results: int, start_at: int = 0) -> dict:
     data = jira.search(jql, max_results, fields=_FIELDS, start_at=start_at)
+    if not isinstance(data.get("total"), int) or data["total"] < 0:
+        raise ValueError("Jira did not return a reliable issue count.")
+    if data.get("startAt", start_at) != start_at:
+        raise ValueError("Jira returned an unexpected results page.")
     issues = [summarize_issue(i) for i in data.get("issues", [])]
     total = data.get("total")
     more = total is None or start_at+len(issues) < total
@@ -82,7 +90,11 @@ def jira_search(ctx: ToolContext, jql: str, max_results: int = 20, start_at: int
     jql: JQL query
     max_results: maximum number of results (at most 50)
     start_at: zero-based result position; use next_start_at to continue"""
-    return search_issues(ctx.jira, jql, max(1,min(int(max_results), CHAT_MAX_RESULTS)), start_at)
+    if not isinstance(jql, str) or not jql.strip():
+        raise ValueError("JQL must be a nonempty query string.")
+    if start_at < 0:
+        raise ValueError("start_at must not be negative.")
+    return {**search_issues(ctx.jira, jql, max(1,min(int(max_results), CHAT_MAX_RESULTS)), start_at), "query": jql}
 
 
 @tool(needs=["jira"])
