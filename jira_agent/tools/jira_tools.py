@@ -5,7 +5,7 @@ import re
 import time
 from datetime import datetime, timezone
 
-from jira_agent.jira_client import JiraClient
+from jira_agent.jira_client import JiraClient, JiraError
 from jira_agent.tools import ToolContext, tool
 
 _FIELDS = "summary,status,priority,components,assignee,updated,created,resolution,issuetype,fixVersions"
@@ -66,7 +66,13 @@ def export_issues(jira: JiraClient, jql: str, limit: int, start_at: int = 0, tim
     while len(issues)<limit:
         if time.monotonic()>=deadline:
             reason='Time limit reached. The export is incomplete.';break
-        data=jira.search(query,min(EXPORT_PAGE_SIZE,limit-len(issues)),fields=_FIELDS,start_at=offset)
+        try:
+            data=jira.search(query,min(EXPORT_PAGE_SIZE,limit-len(issues)),fields=_FIELDS,start_at=offset)
+        except JiraError as exc:
+            if exc.status_code == 429:
+                reason='Jira rate limit exceeded (HTTP 429). The breakdown is incomplete; narrow the scope or retry later.'
+                break
+            raise
         current=data.get('total')
         if not isinstance(current,int) or current<0:
             reason='Jira did not report a reliable total. Completeness is unconfirmed.';break
