@@ -37,7 +37,7 @@ def test_ai_guide_personal_branch_flow():
     assert "git push origin" in section
     assert "uv run pytest tests -q" in section
     assert 'version = "0.10.9+alex.1"' in section
-    assert "not an automatic Git-branch detector" in section
+    assert "not</b> an automatic Git-branch detector" in section
     assert "Never release personal suffixes on main" in section
 
 
