@@ -44,7 +44,8 @@ def jira_search_tickets(ctx: ToolContext, project: str = '', text: str = '', ass
     max_results: result preview size, 1–50; use 1 for a requested example ticket
     start_at: zero-based position; continue with next_start_at from the previous result
     """
-    if re.search(r'(?i)\b(?:issuetype|fixversion|resolution|created|updated|priority|project|assignee|status)\s*(?:=|!=|<=|>=|<|>|\bIS\b|\bIN\b)', text or '') or re.search(r'(?i)\b(?:ORDER\s+BY|AND|OR)\b', text or ''):\n        raise ValueError('The text parameter accepts a plain text phrase, not JQL. Use jira_search(jql=...) for filters.')
+    if re.search(r'(?i)\b(?:issuetype|fixversion|resolution|created|updated|priority|project|assignee|status)\s*(?:=|!=|<=|>=|<|>|\bIS\b|\bIN\b)', text or '') or re.search(r'(?i)\b(?:ORDER\s+BY|AND|OR)\b', text or ''):
+        raise ValueError('The text parameter accepts a plain text phrase, not JQL. Use jira_search(jql=...) for filters.')
     if state not in ('any', 'open', 'resolved'):
         raise ValueError('state must be any, open or resolved.')
     if start_at < 0:
