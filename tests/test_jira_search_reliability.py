@@ -65,7 +65,8 @@ def test_guidance_includes_stress_test_guards():
     assert "NEVER a project key" in JIRA_GUIDANCE
     assert "never JQL" in JIRA_GUIDANCE
     assert "ORDER BY created ASC" in JIRA_GUIDANCE
-    assert "Never invent a SQL table" in JIRA_GUIDANCE
+    assert "NEVER use SQL to verify Jira issue ages" in JIRA_GUIDANCE
+    assert "jira_breakdown_change_requests" in JIRA_GUIDANCE
 
 def test_exact_project_name_is_resolved_to_key():
     class NamedProjectJira(FakeJira):
