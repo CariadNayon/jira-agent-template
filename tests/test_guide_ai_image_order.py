@@ -42,4 +42,6 @@ def test_original_git_folder_illustration_has_embedded_photo():
     root = ElementTree.fromstring(content)
     assert root.tag == "{http://www.w3.org/2000/svg}svg"
     assert "data:image/webp;base64," in content
-    assert "Open the Git folder" in content
+    assert "Open jira-agent-template" in content
+    assert 'L 151 365' in content  # Target is the Git folder row in the sidebar
+    assert 'viewBox="0 0 950 570"' in content
