@@ -141,7 +141,17 @@ def agent_name(state: UserState, settings: dict) -> str:
     return (settings.get("agent_name") or "").strip() or default_agent_name(state.jira_display_name)
 
 
+def local_mode_active() -> bool:
+    """Explicitly requested local development, never Databricks Apps hosting."""
+    return (os.environ.get("JIRA_AGENT_LOCAL_MODE") == "1"
+            and not os.environ.get("DATABRICKS_APP_NAME")
+            and not os.environ.get("DATABRICKS_RUNTIME_VERSION"))
+
+
 def identity(headers: Mapping[str, str]) -> tuple[str | None, str | None]:
+    if local_mode_active():
+        # Do not trust forwarded headers (or inherit an OBO token) in local mode.
+        return "local", None
     h = {k.lower(): v for k, v in (headers or {}).items()}
     return h.get("x-forwarded-email"), h.get("x-forwarded-access-token")
 
