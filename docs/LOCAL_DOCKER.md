@@ -6,8 +6,13 @@ This is the fastest way to develop on Windows, macOS or Linux:
 uv run start-local
 ```
 
-Open <http://127.0.0.1:8000>. It runs one Python FastAPI/Uvicorn process,
-with no Node build, no MLflow server, and no Databricks Apps sign-in.
+Open <http://127.0.0.1:8000>. It runs one Python FastAPI/Uvicorn process and serves the **same built React
+UI** used by the hosted Databricks app. The first start may need Node.js/npm
+**once** to build the shared React frontend, unless
+`e2e-chatbot-app-next/client/dist/index.html` is already present.
+After that, no Node process or npm build is needed during normal startup.
+It never starts MLflow AgentServer or asks for Databricks Apps sign-in.
+To force an updated UI build run `uv run build-local-ui --force`.
 Use **Connect Jira** to enter your personal Jira token. The agent and its
 Jira tools are shared with the production runtime; Jira changes still require
 the normal explicit confirmation code. The AI model still needs Azure
@@ -15,9 +20,10 @@ OpenAI access (`AZURE_OPENAI_KEY` in your local `.env`, or provide it through
 the local browser's **Set AI key** field).
 
 The local chat and custom skill edits are stored in memory and disappear when
-the Python process stops. The existing Jira settings, skill and file APIs
-are available; the lightweight UI intentionally does not yet reproduce every
-hosted UI feature (attachments, formatted charts or Databricks history).
+the Python process stops. The shared React UI and custom Jira controls are
+reused; the Python compatibility endpoints implement an in-memory session,
+config and chat streaming transport. Databricks-dependent features such as
+hosted chat history and shared Unity Catalog publishing remain unavailable.
 Shared Unity Catalog skill publishing and SQL still need Databricks user
 authorization and are not automatically available in this mode.
 
@@ -26,8 +32,9 @@ launcher binds exclusively to `127.0.0.1`. Do not use port-forwarding,
 reverse proxies or public tunnels; credentials and Jira content are sensitive.
 
 **Dependencies:** the current project-wide `uv` environment still installs
-the Databricks/MLflow packages for deployment, but the FastAPI-only runtime
-does not import or start MLflow AgentServer, the Databricks app proxy, or Node.
+Databricks/MLflow packages for deployment. First-time React bundle creation
+requires Node.js/npm (or an existing build); normal `start-local` uses only
+FastAPI and the existing agent modules, not the MLflow server or Node runtime.
 Python environment installation may therefore still take time on first setup.
 
 # Run the Jira Agent locally (Windows, macOS, Linux)
