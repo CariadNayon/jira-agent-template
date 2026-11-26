@@ -148,9 +148,8 @@ async def react_chat(request: Request):
                 if run is not None:
                     run.cancel()
                 yield _frame({"type": "error", "errorText": _safe_text(exc)})
-            finally:
-                yield _frame({"type": "text-end", "id": text_id})
-                yield _frame({"type": "finish"})
+            yield _frame({"type": "text-end", "id": text_id})
+            yield _frame({"type": "finish"})
                 yield "data: [DONE]\n\n"
 
     return StreamingResponse(
