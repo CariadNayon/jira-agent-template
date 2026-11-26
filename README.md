@@ -11,6 +11,31 @@ Die laufende App-Version steht dezent oben links neben dem Agentennamen. Zentral
 - **Ausgaben**: Diagramme (Balken, Linie, Torte, Streuung) sowie CSV- und Excel-Exporte.
 - **Ohne Code anpassbar** über das Zahnrad in der App: Name, Regeln in natürlicher Sprache, Modell, freigegebene Tabellen. Die Anleitung steht in der App unter `/jira/guide`.
 
+## Lightweight local development (FastAPI only)
+
+For developing and testing Jira tools, run the lightweight Python-only local
+server. This **does not** start MLflow AgentServer or download/build the
+Databricks React/Node frontend:
+
+```powershell
+git pull origin main
+uv run start-local
+```
+
+Open **http://127.0.0.1:8000** and connect Jira using your personal token.
+Provide an Azure OpenAI key in the local `.env` (`AZURE_OPENAI_KEY`) or
+use the **Set AI key** field. Jira permissions and model API usage still apply.
+
+The local UI offers chat, Jira authentication, existing tools, approval codes,
+personal skills (in memory), and session settings via the existing API.
+The full Databricks-hosted UI, Unity Catalog shared-skill publishing and
+Databricks OBO are **not** part of this lightweight mode. The UI is an initial
+developer interface, not a pixel-identical copy of the hosted chat UI.
+
+`start-local` binds to **127.0.0.1 only**, has no browser authentication,
+and must not be published to a network. Do not put tokens in the chat.
+Further details: [Local development and Docker](docs/LOCAL_DOCKER.md).
+
 ## Mit KI weiterentwickeln (empfohlen)
 
 Repo in VS Code öffnen und Copilot oder Claude in normaler Sprache sagen, was du willst:
