@@ -52,7 +52,7 @@ def ensure_frontend_local_auth(frontend: Path) -> None:
     const localProvider = createDatabricksProvider({
       useRemoteToolCalling: true,
       baseURL: 'http://127.0.0.1',
-      formatUrl: () => API_PROXY,
+      formatUrl: () => API_PROXY!,
       fetch: databricksFetch,
     });
     oauthProviderCache = localProvider;
