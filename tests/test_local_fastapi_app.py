@@ -48,20 +48,20 @@ def test_local_origin_and_json_only_enforced(monkeypatch):
     from local_app.server import app
     with TestClient(app, base_url="http://127.0.0.1:8000") as c:
         denied = c.post(
-            "/api/local/reset", json={},
+            "/api/feedback", json={},
             headers={"origin": "https://evil.example"}
         )
         assert denied.status_code == 403
         form = c.post(
-            "/api/local/reset", data={"test": "x"},
+            "/api/feedback", data={"test": "x"},
             headers={"content-type": "application/x-www-form-urlencoded"}
         )
         assert form.status_code == 415
         accepted = c.post(
-            "/api/local/reset", json={},
+            "/api/feedback", json={},
             headers={"origin": "http://127.0.0.1:8000"}
         )
-        assert accepted.status_code == 200
+        assert accepted.status_code == 204
 
 
 def test_hosted_environment_does_not_use_local_identity(monkeypatch):
