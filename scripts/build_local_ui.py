@@ -36,7 +36,7 @@ def ensure_frontend() -> None:
     if FRONTEND.is_dir():
         return
     print("Downloading pinned Databricks React UI (first build only)...", flush=True)
-    with tempfile.TemporaryDirectory(prefix="jira-frontend-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="jira-frontend-", dir=ROOT) as tmp:
         checkout = Path(tmp) / "app-templates"
         _run(["git", "clone", "--filter=blob:none", "--sparse",
               "https://github.com/databricks/app-templates.git", str(checkout)])
