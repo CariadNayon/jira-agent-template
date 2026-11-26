@@ -13,4 +13,4 @@ COPY . .
 RUN uv sync --frozen
 ENV PYTHONUTF8=1 PYTHONIOENCODING=utf-8 PYTHONUNBUFFERED=1
 EXPOSE 8000 3000
-CMD ["uv", "run", "start-app"]
+CMD ["uv", "run", "start-app", "--local"]
