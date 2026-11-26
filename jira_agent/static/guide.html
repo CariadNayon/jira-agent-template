@@ -107,7 +107,7 @@ td,th{padding:8px 5px}
 <div class="box"><b>Before you begin</b><ul>
 <li>Access to your Databricks workspace and Jira.</li>
 <li>Permission to create a Git folder and a Databricks App.</li>
-<li>Access to the Azure OpenAI secret, SQL warehouse and an MLflow experiment. Ask your workspace administrator to grant access if needed.</li>
+<li>Access to the Azure OpenAI secret, SQL warehouse and an MLflow experiment. Encrypted Jira-token storage additionally needs a separate secret. Ask your workspace administrator for missing access.</li>
 </ul><p>Your workspace names and IDs are configured in <code>databricks.yml → variables</code>. These are separate from your Jira credentials.</p></div>
 <nav class="toc" aria-label="Bootstrap steps"><a href="#code-holen">1. Get the code</a><a href="#app-anlegen">2. Create an app</a><a href="#zugriffe">3. Configure access</a><a href="#bereitstellen">4. Deploy</a><a href="#jira-token">5. Connect Jira</a></nav>
 <h2 id="code-holen">1. Get the code into your workspace</h2>
@@ -262,19 +262,30 @@ td,th{padding:8px 5px}
 <figcaption>1 · App name → 2 · Create app · Click to enlarge</figcaption>
 </figure><p class="result"><b>Result:</b> Your app is created. Its code has not been deployed yet.</p></li>
 </ol><h2 id="zugriffe">3. Configure resources and user access</h2>
-<p>Open the new app's resource configuration, usually under <b>Configure</b> or <b>Settings</b>. Add these resources. Resource names must match exactly:</p>
-<table><thead><tr><th>Name in the app</th><th>Select</th><th>App permission</th></tr></thead><tbody>
-<tr><td><code>secret</code></td><td>Secret scope and key from <code>variables.secret_scope</code> and <code>variables.secret_key</code></td><td>READ</td></tr>
-<tr><td><code>sql-warehouse</code></td><td>Warehouse from <code>variables.warehouse_id</code></td><td>CAN_USE</td></tr>
-<tr><td><code>experiment</code></td><td>MLflow experiment for this app</td><td>CAN_MANAGE, as in the bundle</td></tr>
+<p>Open the new app's resource configuration under <b>Configure</b> or <b>Settings → Resources</b>. Add these resource bindings with the exact names: <code>app.yaml</code> and <code>databricks.yml</code> refer to them by name. The targets shown are for the existing <code>agent-jira-v2</code>; use your own authorized resources for a separate app.</p>
+<table><thead><tr><th>App resource</th><th>Target for agent-jira-v2</th><th>Permission</th><th>Purpose</th></tr></thead><tbody>
+<tr><td><code>secret</code></td><td><code>defmgtai-eu-we-dev-adb-local-secret-scope / gpt-4-api-key</code></td><td>READ</td><td>Azure OpenAI requests</td></tr>
+<tr><td><code>sql-warehouse</code></td><td><code>822757479507240e</code></td><td>CAN_USE</td><td>SQL queries and shared skill catalog</td></tr>
+<tr><td><code>experiment</code></td><td>MLflow experiment <code>3133561505358820</code></td><td>CAN_EDIT in the running app</td><td>Agent traces and diagnostics</td></tr>
+<tr><td><code>jira-token-key</code></td><td><code>jira-agent-credentials / jira-agent-token-encryption-key</code></td><td>READ</td><td>Optional encrypted Remember for my account</td></tr>
 </tbody></table>
-<p>Open <b>Authorization → User authorization</b> and add these five scopes. A scope allows the app to call a particular API on behalf of the signed-in user.</p>
+<p><b>Bindings:</b> <code>AZURE_OPENAI_KEY → secret</code>, <code>WAREHOUSE_ID → sql-warehouse</code>, <code>MLFLOW_EXPERIMENT_ID → experiment</code>, <code>JIRA_TOKEN_ENCRYPTION_KEY → jira-token-key</code>. The last one needs a valid Fernet key; never put secret values in code or chat, and never overwrite an existing encryption key.</p>
+<p><b>Fifth resource in the existing app:</b> <code>secret-2</code> (<code>gpt-5-api-key</code>, READ) is currently <b>not referenced</b> by <code>app.yaml</code> or <code>databricks.yml</code>, so it is not needed for the default setup. Choosing a GPT-5 deployment alone does not automatically use this second secret. Add it only when explicitly wired into a customized configuration.</p>
+<p><b>MLflow permission:</b> The running app has <code>CAN_EDIT</code> for <code>experiment</code>. Check that a test conversation produces a trace; use the least privilege your workspace requires. Older template versions used <code>CAN_MANAGE</code>.</p>
+<p>Then open <b>Authorization → User authorization</b> and configure these five user API scopes:</p>
 <div class="prompt"><pre>sql
 catalog.catalogs:read
 catalog.schemas:read
 catalog.tables:read
 workspace.workspace</pre><button class="btn" type="button" data-copy>Copy</button></div>
-<p class="result"><b>Result:</b> All three resources and five scopes are saved. The app can request user authorization at sign-in.</p>
+<p>Databricks can add <code>iam.access-control:read</code> and <code>iam.current-user:read</code> automatically; do not add them manually unless instructed by your workspace administrator. Scopes do not grant additional data permissions. The signed-in user needs warehouse <b>CAN_USE</b>, UC <b>USE CATALOG</b>, <b>USE SCHEMA</b> and <b>SELECT</b> for SQL reads, plus write permissions on the shared skill catalog table to publish skills. Jira access uses their own personal Jira API token and Jira project permissions.</p>
+<div class="box"><b>Pre-deployment checklist</b><ol>
+<li>Resource binding names match the four names above; skip only <code>jira-token-key</code> if Remember is intentionally disabled.</li>
+<li>Each resource points to the correct target in <b>your</b> workspace. Do not blindly reuse the example IDs in another workspace.</li>
+<li>The App service principal can read the required secret(s) and use the warehouse; the signed-in user has the relevant data rights.</li>
+<li>The five user scopes are configured, and the user has authorized them.</li>
+</ol></div>
+<p class="result"><b>Result:</b> Four resources (three without Remember) and five configured user scopes are ready for deployment.</p>
 <p class="hint">Screenshots for this section are not available yet. Follow the text instructions and see <a href="#infrastructure-guide">App infrastructure &amp; permissions</a> for details.</p>
 <h2 id="bereitstellen">4. Deploy the code and open the app</h2><ol class="steps">
 <li><h3>Open deployment</h3><p>In the app overview, click <b>Apply</b> or <b>Deploy</b> in the top right (1).</p><figure>
@@ -515,17 +526,24 @@ description: Checks an issue for missing information
 <tr><td>Secret scope</td><td>Stores the Azure key.</td><td>Scope = group of secrets; key = an entry. App resource <code>secret</code> needs READ. Values in <code>variables.secret_scope/secret_key</code>.</td></tr>
 <tr><td>SQL warehouse</td><td>Executes read-only SQL queries.</td><td>Resource <code>sql-warehouse</code>, ID in <code>variables.warehouse_id</code>. App needs CAN_USE; the user also needs CAN_USE.</td></tr>
 <tr><td>Unity Catalog</td><td>Manages catalogs, schemas and tables.</td><td>User needs USE CATALOG, USE SCHEMA and SELECT on the objects, and must enable the table under Settings → Data sources.</td></tr>
-<tr><td>MLflow experiment</td><td>Stores traces for troubleshooting.</td><td>Resource <code>experiment</code>; the bundle uses CAN_MANAGE. Traces may contain chat, issue and query content. Grant access selectively.</td></tr>
+<tr><td>MLflow experiment</td><td>Stores traces for troubleshooting.</td><td>Resource <code>experiment</code>; the running example uses CAN_EDIT. Check that tracing works and grant only the rights your workspace requires. Traces may contain chat, issue and query content.</td></tr>
 <tr><td>Jira</td><td>Reads and edits issues.</td><td>Personal Jira token. Jira project permissions still apply.</td></tr></table>
 <details id="remember-tokens-setup"><summary>Enable “Remember for my account”</summary>
 <p>A disabled checkbox means that a prerequisite is missing. Updating the code alone does not create the encryption secret.</p>
 <ol><li><b>App administrator:</b> create the separate Fernet encryption secret in a restricted secret scope. The configured names are <code>variables.token_encryption_secret_scope</code> and <code>variables.token_encryption_secret_key</code> in <code>databricks.yml</code>.</li>
-<li>Add the app secret resource <b>jira-token-key</b> with <b>READ</b> access. Bind <b>JIRA_TOKEN_ENCRYPTION_KEY</b> to that resource. For bundle deployments, activate both prepared optional blocks in <code>databricks.yml</code> so the next deployment keeps the binding.</li>
+<li>Add the app secret resource <b>jira-token-key</b> with <b>READ</b> access. Bind <b>JIRA_TOKEN_ENCRYPTION_KEY</b> to that resource. For bundle deployments, keep both <code>jira-token-key</code> blocks in <code>databricks.yml</code> so the next deployment keeps the binding.</li>
 <li>Deploy/restart the app and reopen it. You should now be able to select Remember. If the message asks you to sign in again, check User Authorization, the <code>workspace.workspace</code> scope and user-token forwarding, then sign in again.</li>
 <li>If the encryption secret is reported as misconfigured, ask the administrator to validate the existing Fernet key. Do not overwrite a working key: saved tokens depend on it.</li></ol>
 <p><a href="https://github.com/CariadNayon/jira-agent-template/blob/main/docs/TOKEN_STORAGE.md" target="_blank" rel="noopener noreferrer">Full administrator setup instructions</a>. Keep secret values out of chat and source code.</p>
 <p>Until setup is complete, Connect still works for the current session. Remember stays disabled rather than storing the token without encryption.</p></details>
-<h3>User scopes: allowed APIs</h3><p>The app requests these API scopes during user authorization. They do not extend your own permissions.</p>
+<h3 id="post-deploy-check">Post-deployment smoke test</h3><ol>
+<li>Deploy your Git branch and confirm the app is Running. Refresh and check the displayed version matches the deployed commit.</li>
+<li>Connect Jira with your own token and ask <code>Show my open Jira tickets.</code> Confirm actual assigned results appear.</li>
+<li>Ask <code>Break down my open tickets and give me a prioritized to-do list.</code> It should remain scoped to your unresolved tickets, not all Change Requests.</li>
+<li>Open <b>Settings → Data sources</b> and check your permitted tables. For skill publishing, verify your rights on <code>skill_versions</code>.</li>
+<li>If configured, test <b>Remember for my account</b>; if disabled, inspect the encryption-secret status rather than overwriting a key.</li>
+<li>Check the MLflow experiment receives a trace. For failures, check Databricks App Logs and a reviewed, redacted Chat log.</li>
+</ol><h3>User scopes: allowed APIs</h3><p>The app requests these API scopes during user authorization. They do not extend your own permissions.</p>
 <table><tr><th>Scope</th><th>Use</th></tr><tr><td><code>sql</code></td><td>Run SQL with your permissions: read-only chat queries, and publishing skills to the shared catalog.</td></tr><tr><td><code>catalog.catalogs:read</code></td><td>List catalogs.</td></tr><tr><td><code>catalog.schemas:read</code></td><td>List schemas.</td></tr><tr><td><code>catalog.tables:read</code></td><td>Show tables and metadata.</td></tr><tr><td><code>workspace.workspace</code></td><td>Save personal settings and skills in your workspace user folder.</td></tr></table>
 <h3>Three requirements for a table query</h3><ol><li>The app has the appropriate user scopes.</li><li>You have access to the warehouse, catalog, schema and table.</li><li>You selected and saved the table under <b>Settings → Data sources</b>.</li></ol>
 <p>Selecting a table does not grant permissions. SQL queries use your forwarded user token.</p>
