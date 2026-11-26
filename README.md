@@ -69,7 +69,7 @@ Voraussetzungen: [uv](https://docs.astral.sh/uv/getting-started/installation/) �
 | Stabilitätsfälle wiederholen (offline) | `uv run stability-check --repeat 2` |
 | Jira-/Datei-Abnahme (offline) | `uv run agent-evaluate` |
 | Optionale Modelltests anzeigen | `uv run agent-evaluate --list` |
-| Lokal starten | `uv run start-app`, danach http://localhost:8000 |
+| Lokal starten (ohne Databricks-App-Anmeldung) | `uv run start-app --local`, danach http://localhost:8000 |
 | Windows / macOS / Docker | [Lokale Startanleitung](docs/LOCAL_DOCKER.md) |
 | Deploy prüfen | `uv run deploy --check` |
 | Deployen | `uv run deploy` |
