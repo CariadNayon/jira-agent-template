@@ -10,7 +10,7 @@ RUN ln -s /usr/local/lib/node_modules/npm/bin/npm-cli.js /usr/local/bin/npm \
     && pip install --no-cache-dir "uv>=0.9.17"
 WORKDIR /app
 COPY . .
-RUN uv sync --frozen
+RUN uv sync
 ENV PYTHONUTF8=1 PYTHONIOENCODING=utf-8 PYTHONUNBUFFERED=1
 EXPOSE 8000 3000
 CMD ["uv", "run", "start-app", "--local"]
