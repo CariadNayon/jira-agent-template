@@ -23,6 +23,8 @@ from agent_server.execution import prepared_run
 from agent_server.history import public_output_item
 from jira_agent import CFG
 from jira_agent.model_input import make_run_config
+from jira_agent.runtime import load_settings
+from jira_agent.state import user_state
 from jira_agent.web import router as jira_router
 from jira_agent.connections import close_connections
 
@@ -73,6 +75,20 @@ async def homepage():
 @app.get("/health")
 async def health():
     return {"status": "ok", "mode": "local-fastapi"}
+
+
+class AzureKeyBody(BaseModel):
+    key: str = Field(min_length=1, max_length=4096)
+
+
+@app.post("/api/local/azure-key")
+async def set_local_model_key(body: AzureKeyBody):
+    # The existing Jira credentials endpoint only stores the key. Here we
+    # additionally select the matching provider for immediate local use.
+    state = user_state("local")
+    state.creds["azure_key"] = body.key
+    load_settings(state, "local", None)["llm_provider"] = "azure_own"
+    return {"status": "ready", "provider": "azure_own"}
 
 
 class ChatBody(BaseModel):
