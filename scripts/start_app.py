@@ -249,10 +249,8 @@ class ProcessManager:
         try:
             # Build backend command, passing through all arguments
             backend_cmd = ["uv", "run", "start-server"]
-            if self.local:
-                bind_host = ("0.0.0.0" if os.environ.get("JIRA_AGENT_LOCAL_BIND_ALL") == "1"
-                             else "127.0.0.1")
-                backend_cmd.extend(["--host", bind_host])
+            # MLflow AgentServer accepts --port/--workers/--reload, but not
+            # --host. agent_server/start_server.py sets the local bind host.
             if backend_args:
                 backend_cmd.extend(backend_args)
 
