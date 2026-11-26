@@ -30,7 +30,24 @@ def jira_plan_my_work(ctx: ToolContext, max_issues: int = 100) -> dict:
     for issue in issues:
         issue["effort"] = "unknown (not returned by this Jira search)"
         issue["urgency"] = "not independently verified; Jira priority is only a proxy"
-        issue["next_step"] = "Review the ticket description, acceptance criteria and blockers; determine the next concrete action."
+    # Enrich the most urgent items with actual descriptions and effort/due-date fields
+    # so next steps are based on the user's real work, not generic advice.
+    for issue in issues[:5]:
+        try:
+            details = ctx.jira.issue(issue["key"], fields="description,duedate,timetracking,timeoriginalestimate")
+            fields = details.get("fields") or {}
+            description = fields.get("description")
+            if isinstance(description, str):
+                issue["description_excerpt"] = description[:1000]
+            issue["due_date"] = fields.get("duedate")
+            tracking = fields.get("timetracking") or {}
+            estimate = tracking.get("originalEstimate") if isinstance(tracking, dict) else None
+            if estimate:
+                issue["effort"] = estimate
+            elif isinstance(fields.get("timeoriginalestimate"), (int, float)):
+                issue["effort"] = f'{fields["timeoriginalestimate"]} seconds (original Jira estimate)'
+        except Exception:
+            issue["details_unavailable"] = True
     return {
         "scope": "Only unresolved Jira issues assigned to the signed-in user",
         "query": result["query"],
