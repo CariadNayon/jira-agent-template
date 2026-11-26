@@ -1,0 +1,12 @@
+.git
+.venv
+.env
+.env.*
+!.env.example
+__pycache__
+.pytest_cache
+node_modules
+e2e-chatbot-app-next
+backend.log
+frontend.log
+*.pyc
