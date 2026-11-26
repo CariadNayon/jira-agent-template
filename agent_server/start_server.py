@@ -4,6 +4,7 @@ from scripts.app_diagnostics import install_diagnostics  # noqa: E402
 
 install_diagnostics()
 
+import os
 import sys
 from pathlib import Path
 
@@ -40,4 +41,10 @@ def require_single_worker(argv: list[str]) -> None:
 
 def main():
     require_single_worker(sys.argv[1:])
-    agent_server.run(app_import_string="agent_server.start_server:app")
+    # AgentServer CLI does not accept --host; supply it to run() directly.
+    local_mode = (os.environ.get("JIRA_AGENT_LOCAL_MODE") == "1"
+                  and not os.environ.get("DATABRICKS_APP_NAME")
+                  and not os.environ.get("DATABRICKS_RUNTIME_VERSION"))
+    host = ("0.0.0.0" if os.environ.get("JIRA_AGENT_LOCAL_BIND_ALL") == "1"
+            else "127.0.0.1") if local_mode else "0.0.0.0"
+    agent_server.run(app_import_string="agent_server.start_server:app", host=host)
