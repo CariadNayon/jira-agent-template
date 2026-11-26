@@ -60,7 +60,7 @@ resources:
         - name: 'experiment'
           experiment:
             experiment_id: ""
-            permission: 'CAN_MANAGE'
+            permission: 'CAN_EDIT'
 
         - name: 'secret'
           secret:
