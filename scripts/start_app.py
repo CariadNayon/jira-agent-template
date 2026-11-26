@@ -62,7 +62,7 @@ def check_port_available(port: int) -> bool:
 
 
 class ProcessManager:
-    def __init__(self, port=8000, no_ui=False):
+    def __init__(self, port=8000, no_ui=False, local=False):
         self.backend_process = None
         self.frontend_process = None
         self.backend_ready = False
@@ -73,6 +73,7 @@ class ProcessManager:
         self.log_files = contextlib.ExitStack()
         self.port = port
         self.no_ui = no_ui
+        self.local = local
 
     def check_ports(self):
         """Check that required ports are available before starting processes."""
@@ -216,6 +217,14 @@ class ProcessManager:
 
     def run(self, backend_args=None):
         load_dotenv(dotenv_path=Path(__file__).parent.parent / ".env", override=True)
+        if self.local:
+            if os.environ.get("DATABRICKS_APP_NAME") or os.environ.get("DATABRICKS_RUNTIME_VERSION"):
+                raise SystemExit("Local mode cannot be used inside Databricks Apps.")
+            os.environ["JIRA_AGENT_LOCAL_MODE"] = "1"
+            print("Local development mode: Databricks Apps login is disabled (Jira token still required).")
+        else:
+            # Never inherit local-mode bypass from .env on a normal/hosted startup.
+            os.environ.pop("JIRA_AGENT_LOCAL_MODE", None)
         if not os.environ.get("DATABRICKS_APP_NAME"):
             self.check_ports()
 
@@ -240,6 +249,10 @@ class ProcessManager:
         try:
             # Build backend command, passing through all arguments
             backend_cmd = ["uv", "run", "start-server"]
+            if self.local:
+                bind_host = ("0.0.0.0" if os.environ.get("JIRA_AGENT_LOCAL_BIND_ALL") == "1"
+                             else "127.0.0.1")
+                backend_cmd.extend(["--host", bind_host])
             if backend_args:
                 backend_cmd.extend(backend_args)
 
@@ -328,6 +341,11 @@ def main():
         "Use 'uv run start-server --help' for available options.",
     )
     parser.add_argument(
+        "--local",
+        action="store_true",
+        help="Run a local-only development session without Databricks Apps login",
+    )
+    parser.add_argument(
         "--no-ui",
         action="store_true",
         help="Run backend only, skip frontend UI",
@@ -344,7 +362,9 @@ def main():
                 pass
             break
 
-    sys.exit(ProcessManager(port=port, no_ui=args.no_ui).run(backend_args))
+    if args.local and any(arg == "--host" or arg.startswith("--host=") for arg in backend_args):
+        parser.error("--local manages the bind address; do not pass --host.")
+    sys.exit(ProcessManager(port=port, no_ui=args.no_ui, local=args.local).run(backend_args))
 
 
 if __name__ == "__main__":
