@@ -21,7 +21,7 @@ def test_local_ui_and_health(monkeypatch):
     monkeypatch.delenv("DATABRICKS_APP_NAME", raising=False)
     monkeypatch.delenv("DATABRICKS_RUNTIME_VERSION", raising=False)
     from local_app.server import app
-    with TestClient(app) as c:
+    with TestClient(app, base_url="http://localhost:8000") as c:
         health = c.get("/health")
         assert health.status_code == 200
         assert health.json()["mode"] == "local-fastapi"
