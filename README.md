@@ -14,8 +14,8 @@ Die laufende App-Version steht dezent oben links neben dem Agentennamen. Zentral
 ## Lightweight local development (FastAPI only)
 
 For developing and testing Jira tools, run the lightweight Python-only local
-server. This **does not** start MLflow AgentServer or download/build the
-Databricks React/Node frontend:
+server. It does **not** start MLflow AgentServer or a Node backend;
+it serves the shared React UI as static browser files:
 
 ```powershell
 git pull origin main
@@ -24,7 +24,8 @@ uv run start-local
 
 Open **http://127.0.0.1:8000** and connect Jira using your personal token.
 Provide an Azure OpenAI key in the local `.env` (`AZURE_OPENAI_KEY`) or
-use the **Set AI key** field. Jira permissions and model API usage still apply.
+select the **own-key Azure provider** in Settings → Connections and enter
+your own key. Jira permissions and model API usage still apply.
 
 The local FastAPI server serves the **same Databricks React chat UI** including
 the existing Jira toolbar, settings, guide, upload and approval controls.
