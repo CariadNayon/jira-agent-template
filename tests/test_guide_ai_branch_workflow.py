@@ -31,8 +31,8 @@ def test_ai_guide_personal_branch_flow():
     assert "VS Code + GitHub Copilot" in section
     assert "Baramundi Kiosk" in section
     assert "Open in Terminal" in section
-    assert "https://git.hub.vwgroup.com/v8ee318/jira_agent_template.git" in section
-    assert 'git clone https://git.hub.vwgroup.com/v8ee318/jira_agent_template.git' in section
+    assert "https://github.com/CariadNayon/jira-agent-template.git" in section
+    assert 'git clone https://github.com/CariadNayon/jira-agent-template.git' in section
     assert "git switch -c" in section
     assert "git push origin" in section
     assert "uv run pytest tests -q" in section
