@@ -103,7 +103,7 @@ $('saveAzure').addEventListener('click', async()=>{
   if(!key)return;
   $('saveAzure').disabled=true;
   try {
-    await call('/jira/api/credentials',{azure_key:key});
+    await call('/api/local/azure-key',{key});
     $('azureKey').value='';
     $('connection').textContent += ' · AI key saved for this session';
   }catch(e){$('connection').textContent='AI key: '+e.message}
