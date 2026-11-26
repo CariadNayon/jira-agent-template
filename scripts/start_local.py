@@ -27,11 +27,15 @@ def main() -> None:
     set_default_openai_api("chat_completions")
     set_trace_processors([])
 
+    from scripts.build_local_ui import build_local_ui
+    assets = build_local_ui()
+    print(f"Using shared React UI: {assets}", flush=True)
+
     import uvicorn
 
     print("T1 Jira Agent · FastAPI local development")
     print("Open http://127.0.0.1:8000")
-    print("No Databricks Apps login, Node.js, or MLflow AgentServer is started.")
+    print("Same React UI as Databricks, served by FastAPI; no Node server or Databricks sign-in.")
     print("Local mode is single-user and must not be exposed on a network.")
     uvicorn.run("local_app.server:app", host="127.0.0.1", port=8000, workers=1,
                 reload=False, log_level="info")
