@@ -150,7 +150,7 @@ async def react_chat(request: Request):
                 yield _frame({"type": "error", "errorText": _safe_text(exc)})
             yield _frame({"type": "text-end", "id": text_id})
             yield _frame({"type": "finish"})
-                yield "data: [DONE]\n\n"
+            yield "data: [DONE]\n\n"
 
     return StreamingResponse(
         events(), media_type="text/event-stream",
