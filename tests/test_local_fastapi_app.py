@@ -16,19 +16,28 @@ def test_start_local_does_not_reference_node_or_mlflow_agentserver():
     assert "subprocess" not in source
 
 
-def test_local_ui_and_health(monkeypatch):
+def test_local_ui_and_health(monkeypatch, tmp_path):
     monkeypatch.setenv("JIRA_AGENT_LOCAL_MODE", "1")
     monkeypatch.delenv("DATABRICKS_APP_NAME", raising=False)
     monkeypatch.delenv("DATABRICKS_RUNTIME_VERSION", raising=False)
-    from local_app.server import app
+    from local_app import server
+    build = tmp_path / "client" / "dist"
+    (build / "assets").mkdir(parents=True)
+    (build / "index.html").write_text('<html><body>Same React application</body></html>', encoding='utf-8')
+    (build / "assets" / "index.js").write_text('console.log("react")', encoding="utf-8")
+    monkeypatch.setattr(server, "DIST", build)
+    app = server.app
     with TestClient(app, base_url="http://localhost:8000") as c:
         health = c.get("/health")
         assert health.status_code == 200
         assert health.json()["mode"] == "local-fastapi"
         page = c.get("/")
         assert page.status_code == 200
-        assert "Connect Jira" in page.text
-        assert "LOCAL FASTAPI" in page.text
+        assert "Same React application" in page.text
+        assert '/jira/static/ui.js' in page.text
+        assert c.get("/assets/index.js").status_code == 200
+        assert c.get("/api/session").json()["user"]["email"] == "local"
+        assert c.get("/api/config").json()["features"]["chatHistory"] is False
         me = c.get("/jira/api/me")
         assert me.status_code == 200
         assert me.json()["email"] == "local"
