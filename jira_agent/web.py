@@ -21,7 +21,7 @@ from jira_agent import CFG, __version__, chatlog, registry
 from jira_agent.jira_client import JiraClient, JiraError
 from jira_agent.llm import PROVIDERS, check_azure_endpoint
 from jira_agent.runtime import (DEFAULT_SETTINGS, WAREHOUSE_ID, agent_name, all_skills, catalog_skills,
-                                default_agent_name, identity, load_catalog_skill, load_personal_skills,
+                                default_agent_name, identity, local_mode_active, load_catalog_skill, load_personal_skills,
                                 load_settings, user_client)
 from jira_agent.settings_store import SettingsStore, sanitize
 from jira_agent.skills import MAX_PERSONAL, NAME_RE, PersonalSkillStore, check_skill, render_skill, team_skills
@@ -455,7 +455,9 @@ async def save_skill(name: str, body: SkillBody, request: Request):
     if skill["name"] not in personal and len(personal) >= MAX_PERSONAL:
         raise HTTPException(400, f"Maximum: {MAX_PERSONAL} personal skills.")
     personal[skill["name"]] = {**skill, "quelle": "persoenlich"}
-    await asyncio.to_thread(PersonalSkillStore(_client(token), email).save, personal)
+    if not local_mode_active():
+        await asyncio.to_thread(PersonalSkillStore(_client(token), email).save, personal)
+    # Local developer skills live in memory; no Databricks workspace required.
     state.skills = personal
     return {"name": skill["name"], "saved": True}
 
@@ -468,7 +470,9 @@ async def delete_skill(name: str, request: Request):
     if name not in personal:
         raise HTTPException(404, "Personal skill not found (team skills can only be edited in the repository).")
     personal.pop(name)
-    await asyncio.to_thread(PersonalSkillStore(_client(token), email).save, personal)
+    if not local_mode_active():
+        await asyncio.to_thread(PersonalSkillStore(_client(token), email).save, personal)
+    # Local developer skills live in memory; no Databricks workspace required.
     state.skills = personal
     return {"status": "deleted"}
 
