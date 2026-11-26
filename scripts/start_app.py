@@ -41,6 +41,15 @@ BACKEND_READY = [r"Uvicorn running on", r"Application startup complete", r"Start
 FRONTEND_READY = [r"Server is running on http://localhost"]
 
 
+def executable(name: str) -> str:
+    """Find an executable on Windows, macOS or Linux, including .cmd shims."""
+    resolved = shutil.which(name)
+    if not resolved:
+        raise RuntimeError(f"{name} is required to start the app. Install it and restart your terminal.")
+    return resolved
+
+
+
 def check_port_available(port: int) -> bool:
     """Check if a port is available (nothing is actively listening on it)."""
     try:
@@ -73,7 +82,7 @@ class ProcessManager:
         if not check_port_available(backend_port):
             errors.append(
                 f"Port {backend_port} (backend) is already in use.\n"
-                f"  To free it: lsof -ti :{backend_port} | xargs kill -9"
+                f"  Stop the process listening on port {backend_port} and retry."
             )
 
         if not self.no_ui:
@@ -96,7 +105,7 @@ class ProcessManager:
                 )
                 errors.append(
                     f"Port {frontend_port} (frontend, source: {port_source}) is already in use.\n"
-                    f"  To free it: lsof -ti :{frontend_port} | xargs kill -9\n"
+                    f"  Stop the process listening on port {frontend_port} and retry.\n"
                     f"  Or set a different port: CHAT_APP_PORT=<port> in .env"
                 )
 
@@ -170,7 +179,8 @@ class ProcessManager:
         print(f"Starting {name}...")
         # cmd is always an argument list built by this script (never shell=True)
         process = subprocess.Popen(  # nosemgrep: dangerous-subprocess-use-audit
-            cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1, cwd=cwd
+            cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+            encoding="utf-8", errors="replace", bufsize=1, cwd=cwd
         )
 
         thread = threading.Thread(
@@ -244,22 +254,27 @@ class ProcessManager:
                 # npm is a .cmd shim on Windows, which can't be launched by bare
                 # name without a shell; resolve its full path (honors PATHEXT) so
                 # argument lists work on every platform.
-                npm = shutil.which("npm") or "npm"
+                npm = executable("npm")
+                node = executable("node")
                 for args, desc in [(["ci"], "ci"), (["run", "build"], "build")]:
                     print(f"Running npm {desc}...")
                     result = subprocess.run(  # nosemgrep: dangerous-subprocess-use-audit
-                        [npm, *args], cwd=frontend_dir, capture_output=True, text=True
+                        [npm, *args], cwd=frontend_dir, capture_output=True, text=True,
+                        encoding="utf-8", errors="replace"
                     )
                     if result.returncode != 0:
                         print(f"npm {desc} failed: {result.stderr}")
                         return 1
 
+                # Upstream npm start uses POSIX `NODE_ENV=production node ...`,
+                # which fails under Windows cmd.exe. Launch Node directly on every OS.
+                os.environ["NODE_ENV"] = "production"
                 self.frontend_process = self.start_process(
-                    [npm, "run", "start"],
+                    [node, "--env-file-if-exists", "../.env", "dist/index.mjs"],
                     "frontend",
                     self.frontend_log,
                     FRONTEND_READY,
-                    cwd=frontend_dir,
+                    cwd=frontend_dir / "server",
                 )
 
                 print(
