@@ -26,11 +26,18 @@ Open **http://127.0.0.1:8000** and connect Jira using your personal token.
 Provide an Azure OpenAI key in the local `.env` (`AZURE_OPENAI_KEY`) or
 use the **Set AI key** field. Jira permissions and model API usage still apply.
 
-The local UI offers chat, Jira authentication, existing tools, approval codes,
-personal skills (in memory), and session settings via the existing API.
-The full Databricks-hosted UI, Unity Catalog shared-skill publishing and
-Databricks OBO are **not** part of this lightweight mode. The UI is an initial
-developer interface, not a pixel-identical copy of the hosted chat UI.
+The local FastAPI server serves the **same Databricks React chat UI** including
+the existing Jira toolbar, settings, guide, upload and approval controls.
+The UI is built **once** on the first run (`npm ci` + `npm run build:client`)
+or reuses the already-built `e2e-chatbot-app-next/client/dist` bundle.
+Subsequent starts do not run Node or npm. To force a rebuild after changing
+the upstream React source: `uv run build-local-ui --force`.
+
+A small Python compatibility API supplies the React session, config and
+AI SDK streaming chat endpoints. Chat history is in memory only (no DB).
+The shared Unity Catalog skill catalogue and Databricks OBO remain unavailable
+without user-scoped Databricks authentication. The UI appearance is shared,
+but server features that depend on Databricks are not fully mirrored.
 
 `start-local` binds to **127.0.0.1 only**, has no browser authentication,
 and must not be published to a network. Do not put tokens in the chat.
