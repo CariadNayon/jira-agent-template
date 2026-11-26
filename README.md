@@ -70,6 +70,7 @@ Voraussetzungen: [uv](https://docs.astral.sh/uv/getting-started/installation/) �
 | Jira-/Datei-Abnahme (offline) | `uv run agent-evaluate` |
 | Optionale Modelltests anzeigen | `uv run agent-evaluate --list` |
 | Lokal starten | `uv run start-app`, danach http://localhost:8000 |
+| Windows / macOS / Docker | [Lokale Startanleitung](docs/LOCAL_DOCKER.md) |
 | Deploy prüfen | `uv run deploy --check` |
 | Deployen | `uv run deploy` |
 | Bestehende App übernehmen | `uv run deploy --bind` |
