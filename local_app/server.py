@@ -15,7 +15,7 @@ from uuid import uuid4
 from agents import Runner, set_default_openai_api
 from agents.tracing import set_trace_processors
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from pydantic import BaseModel, Field
 
@@ -25,7 +25,8 @@ from jira_agent import CFG
 from jira_agent.model_input import make_run_config
 from jira_agent.runtime import load_settings
 from jira_agent.state import user_state
-from jira_agent.web import router as jira_router
+from jira_agent.web import router as jira_router, inject_ui
+from local_app.react_api import router as react_router
 from jira_agent.connections import close_connections
 
 log = logging.getLogger("jira_agent.local")
@@ -43,6 +44,8 @@ _run_lock = asyncio.Lock()
 app = FastAPI(title="T1 Jira Agent - Local Development", docs_url=None, redoc_url=None)
 app.add_middleware(TrustedHostMiddleware, allowed_hosts=["localhost", "127.0.0.1"])
 app.include_router(jira_router)
+app.include_router(react_router)
+DIST = Path(__file__).resolve().parents[1] / "e2e-chatbot-app-next" / "client" / "dist"
 
 
 @app.middleware("http")
@@ -53,10 +56,11 @@ async def local_security(request: Request, call_next):
         origin = request.headers.get("origin")
         if origin and origin not in ("http://127.0.0.1:8000", "http://localhost:8000"):
             return JSONResponse({"detail": "Cross-origin requests are blocked."}, status_code=403)
-        if request.headers.get("content-type", "").split(";")[0].strip().lower() != "application/json":
-            # Existing /jira/api/upload accepts raw file bytes. The local dev UI
-            # deliberately does not support browser uploads yet.
-            return JSONResponse({"detail": "JSON requests only in local dev mode."}, status_code=415)
+        media = request.headers.get("content-type", "").split(";")[0].strip().lower()
+        is_upload = request.url.path == "/jira/api/upload"
+        if not (media == "application/json" or is_upload or
+                (request.method == "DELETE" and not media)):
+            return JSONResponse({"detail": "Unsupported request content type."}, status_code=415)
     return await call_next(request)
 
 
@@ -65,11 +69,20 @@ async def shutdown():
     await close_connections()
 
 
+def _react_html() -> HTMLResponse:
+    index = DIST / "index.html"
+    if not index.is_file():
+        raise HTTPException(503, "React UI not built. Run uv run build-local-ui.")
+    # Exact same custom Jira toolbar/settings/script as the hosted UI.
+    return HTMLResponse(inject_ui(index.read_bytes()).decode("utf-8"),
+                        headers={"Cache-Control": "no-store",
+                                 "Content-Security-Policy":
+                                 "img-src 'self' data: blob:; object-src 'none'; frame-ancestors 'none'"})
+
+
 @app.get("/")
 async def homepage():
-    return FileResponse(Path(__file__).with_name("index.html"), media_type="text/html",
-                        headers={"Cache-Control": "no-store",
-                                 "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data:; object-src 'none'; frame-ancestors 'none'; base-uri 'none'"})
+    return _react_html()
 
 
 @app.get("/health")
@@ -142,3 +155,25 @@ async def reset():
     async with _run_lock:
         _chats.clear()
     return {"status": "cleared"}
+
+
+@app.get("/assets/{filename:path}")
+async def react_asset(filename: str):
+    directory = (DIST / "assets").resolve()
+    path = (directory / filename).resolve()
+    if not path.is_relative_to(directory) or not path.is_file():
+        raise HTTPException(404, "Asset not found")
+    return FileResponse(path, headers={"Cache-Control": "public, max-age=86400"})
+
+
+@app.get("/chat/{conversation_id}")
+async def react_chat_page(conversation_id: str):
+    return _react_html()
+
+
+@app.get("/favicon.ico")
+async def favicon():
+    path = DIST / "favicon.ico"
+    if path.is_file():
+        return FileResponse(path)
+    return Response(status_code=204)
